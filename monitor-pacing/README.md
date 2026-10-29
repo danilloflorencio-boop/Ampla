@@ -7,8 +7,9 @@ e o que fazer, com valor e prazo. O foco é só pacing: custo unitário e result
 
 Duas peças:
 
-- **Painel**: todas as contas da Ampla numa tela, como uma MCC (cliente › contas por plataforma ›
-  linhas), em estilo de quadro de partidas, com filtro "Contas de" (analista) e "Time de" (liderança).
+- **Painel**: todas as contas da Ampla numa tela, como uma MCC (cliente › contas por plataforma),
+  em estilo de quadro de partidas, com filtro "Contas de" (analista) e "Time de" (liderança).
+  O botão "Visão geral" de cada cliente ou conta abre o resumo enxuto das linhas em veiculação.
 - **Avisos no Google Chat**: o Operações Bot avisa o analista e a liderança direta só quando uma
   linha sai da margem de ±10% a 10 dias ou menos do fim. Ver `docs/AVISOS.md`.
 
@@ -24,6 +25,9 @@ npm test             # testes do núcleo
 npm run dev          # servidor local em http://localhost:5173
 npm run build        # gera dist/monitor-pacing.html (arquivo único, abre direto do disco)
 ```
+
+Para ver só o painel com 12 clientes fictícios (cenário com problemas e cenário com tudo no ritmo,
+a prévia dos avisos e a conferência de cada caso), abra `dist/teste-painel.html`.
 
 Sem instalar nada, abra `dist/monitor-pacing.html` no navegador e clique em
 **"Abrir demonstração (SEBRAE PE)"**. A demonstração abre o plano SEBRAE PE real e três clientes
@@ -43,10 +47,10 @@ o monitor fica em `https://<usuário>.github.io/<repo>/monitor-pacing/`.
    mesmo dia substitui os valores, sem duplicar.
 3. **Vínculos**: confirmar quais conjuntos de anúncios atendem cada linha do plano. As sugestões
    saem do código da turma, da praça e do produto (`docs/NOMENCLATURA.md`).
-4. **Equipe e avisos**: cadastrar analistas, lideranças diretas e o analista de cada cliente,
-   e o link do monitor publicado. A tela mostra a prévia das mensagens do dia.
-5. **Consultar**: o painel com todas as contas; clicar numa conta abre o cliente (visão geral,
-   ritmo por linha, turmas e alertas). Cada alerta pode ser aceito, adiado ou descartado com motivo. O botão
+4. **Equipe e avisos** (só liderança): cadastrar analistas, lideranças diretas e o analista de
+   cada cliente, e o link do monitor publicado. A tela mostra a prévia das mensagens do dia.
+5. **Consultar**: o painel com todas as contas; o botão "Visão geral" abre o cliente ou a conta.
+   Os alertas do cliente ficam em "Alertas". Cada alerta pode ser aceito, adiado ou descartado com motivo. O botão
    "Copiar ações abertas" monta o texto do review diário com a agência parceira.
 
 Novas versões do plano (REV4…) mostram as diferenças antes de substituir e preservam os vínculos,
@@ -69,8 +73,8 @@ src/
   config/
     config.js      faixas de status, limiares das regras, KPIs, comportamento das plataformas
     textos.js      textos dos alertas (editáveis)
-  ui/              interface (HTML + CSS + JS puro, Chart.js e SheetJS via CDN)
-  demo/            plano SEBRAE já lido e os clientes fictícios do painel
+  ui/              interface (HTML + CSS + JS puro, Chart.js e SheetJS via CDN); teste.js = página de teste
+  demo/            plano SEBRAE já lido, clientes fictícios da demonstração e cenários da página de teste
 docs/              contrato de dados, nomenclatura, regras, prompt de continuidade
 fixtures/          plano SEBRAE REV3 (.xlsx) e realizado de exemplo (.csv)
 tests/             node --test

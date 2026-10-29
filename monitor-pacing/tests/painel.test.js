@@ -5,7 +5,7 @@ import { lerPlano } from '../src/core/plano.js';
 import { gerarRealizadoMock } from '../src/core/mock.js';
 import { entidadesDoRealizado } from '../src/core/realizado.js';
 import { sugerirVinculos, aplicarSugestoes } from '../src/core/vinculo.js';
-import { foraDaMargem, sentido, contasDoCliente, montarPainel, filtrarPainel, soPacing, calcularCliente, ajusteDaLinha, tipoDeOrcamento, agruparPorCliente } from '../src/core/painel.js';
+import { foraDaMargem, sentido, contasDoCliente, montarPainel, filtrarPainel, soPacing, calcularCliente, ajusteDaLinha, tipoDeOrcamento, agruparPorCliente, ehLideranca, podeGerirEquipe } from '../src/core/painel.js';
 import { montarAvisos, linkDaConta } from '../src/core/avisos.js';
 import { configDoCliente } from '../src/config/config.js';
 import { montarDemo, EQUIPE_DEMO, REF_DEMO } from '../src/demo/demoPainel.js';
@@ -169,4 +169,17 @@ test('dado desatualizado não vira aviso: a conta aparece como desatualizada', (
   assert.ok(agruparPorCliente(painel.contas).every((g) => g.total.sentido === null || g.total.nAtivas === 0));
   const vazio = contasDoCliente({ ...demo()[0], realizado: [] }, REF_DEMO);
   assert.ok(vazio.every((c) => c.desatualizado), 'sem realizado nenhum também é desatualizado');
+});
+
+test('equipe e avisos: só a liderança acessa, salvo antes do primeiro cadastro de liderança', () => {
+  assert.equal(podeGerirEquipe({ pessoas: [] }, null), true, 'equipe vazia: aberta para o primeiro cadastro');
+  assert.equal(podeGerirEquipe({ pessoas: [{ nome: 'A', email: 'a@x', lider: null }] }, null), true, 'sem liderança cadastrada');
+  assert.equal(ehLideranca(EQUIPE_DEMO, 'helena.prado@exemplo.com'), true);
+  assert.equal(ehLideranca(EQUIPE_DEMO, 'bruna.lima@exemplo.com'), false);
+  assert.equal(podeGerirEquipe(EQUIPE_DEMO, 'helena.prado@exemplo.com'), true);
+  assert.equal(podeGerirEquipe(EQUIPE_DEMO, 'bruna.lima@exemplo.com'), false);
+  assert.equal(podeGerirEquipe(EQUIPE_DEMO, null), false, 'sem identificação, bloqueada');
+  const soLiderDeAlguem = { pessoas: [{ nome: 'L', email: 'l@x', lider: null }, { nome: 'A', email: 'a@x', lider: 'l@x' }] };
+  assert.equal(podeGerirEquipe(soLiderDeAlguem, 'l@x'), true, 'quem é liderança direta de alguém conta como liderança');
+  assert.equal(podeGerirEquipe(soLiderDeAlguem, 'a@x'), false);
 });

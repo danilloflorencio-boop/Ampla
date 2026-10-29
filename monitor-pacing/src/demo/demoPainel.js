@@ -16,8 +16,8 @@ const IGOR = 'igor.matos@exemplo.com';
 
 export const EQUIPE_DEMO = {
   pessoas: [
-    { nome: 'Helena Prado', email: HELENA, lider: null },
-    { nome: 'Igor Matos', email: IGOR, lider: null },
+    { nome: 'Helena Prado', email: HELENA, lider: null, lideranca: true },
+    { nome: 'Igor Matos', email: IGOR, lider: null, lideranca: true },
     { nome: 'Bruna Lima', email: BRUNA, lider: HELENA },
     { nome: 'Caio Rocha', email: CAIO, lider: HELENA },
     { nome: 'Duda Nunes', email: DUDA, lider: IGOR },

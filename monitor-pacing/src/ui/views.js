@@ -1,8 +1,9 @@
 // Telas do monitor (HTML como string; eventos via delegação em app.js).
-import { brl, pct, inteiro, decimal, dataBR, dataCurta, diffDias, addDias } from '../core/format.js';
-import { rotuloLinha, rotuloFlight } from '../core/plano.js';
-import { agruparPor, agregar } from '../core/pacing.js';
-import { agruparPorCliente } from '../core/painel.js';
+import { brl, pct, inteiro, decimal, dataBR, dataCurta, addDias } from '../core/format.js';
+import { rotuloLinha, rotuloCurto } from '../core/plano.js';
+import { configPlataforma } from '../config/config.js';
+import { agregar } from '../core/pacing.js';
+import { agruparPorCliente, podeGerirEquipe, foraDaMargem } from '../core/painel.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const CONFIANCA = { alta: 'alta', media: 'média', baixa: 'baixa' };
@@ -42,46 +43,33 @@ export function telaVazia() {
 const ABAS_GERAIS = ['painel', 'equipe'];
 
 export function topo(ctx, painel) {
-  const { db, ws, ref, filtros, opcoes, estado } = ctx;
+  const { db, ws, ref, estado } = ctx;
   const doCliente = !ABAS_GERAIS.includes(estado.aba);
   const clientes = Object.values(db.clientes).sort((a, b) => a.cliente.localeCompare(b.cliente, 'pt-BR'));
-  const sel = (nome, rotulo, lista, valor) => `<label class="campo">${rotulo}
-    <select data-filtro="${nome}"><option value="">Todos</option>${lista.map((o) => `<option value="${esc(o.v)}" ${o.v === valor ? 'selected' : ''}>${esc(o.r)}</option>`).join('')}</select></label>`;
   const abertos = ctx.alertas.filter((a) => a.estado === 'aberto');
   const criticos = abertos.filter((a) => a.severidade === 'critico').length;
   const pend = ctx.pendenciasVinculo;
   const aba = (id, rotulo, contador, quente) => `<button role="tab" data-aba="${id}" aria-selected="${estado.aba === id}">${rotulo}${contador ? `<span class="contador ${quente ? 'quente' : ''}">${contador}</span>` : ''}</button>`;
   const ext = ctx.ultimaExtracao;
   const velho = ctx.alertas.some((a) => a.regra === 'R13');
-  const nFiltros = Object.values(filtros).filter(Boolean).length;
   return `<header class="topo">
     <div class="topo-linha">
       <div class="marca-app"><h1>Monitor de pacing</h1><span>Ampla · mídia</span></div>
       <label class="campo">Data de referência <input type="date" value="${esc(ref)}" data-acao-change="trocar-ref"></label>
       ${doCliente ? `<div class="frescor ${velho ? 'velho' : ''}" title="Data da extração mais recente do realizado deste cliente"><i></i>${ext ? `Dados extraídos em ${esc(ext.replace('T', ' ').slice(0, 16))}` : ws?.realizado?.length ? 'Sem data de extração' : 'Sem realizado carregado'}</div>` : ''}
+      <label class="campo">Você é
+        <select data-acao-change="trocar-usuario"><option value="">Selecione</option>${[...db.equipe.pessoas].filter((x) => x.email).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((x) => `<option value="${esc(x.email)}" ${x.email === db.preferencias.usuario ? 'selected' : ''}>${esc(x.nome || x.email)}</option>`).join('')}</select></label>
       <div class="acoes-topo">
-        ${doCliente ? `<button class="btn btn-mini so-celular" data-acao="alternar-filtros" aria-expanded="${estado.filtrosAbertos}">Filtros${nFiltros ? ` (${nFiltros})` : ''}</button>
-        <button class="btn" data-acao="importar-realizado">Subir realizado</button>` : ''}
+        ${doCliente ? '<button class="btn" data-acao="importar-realizado">Subir realizado</button>' : ''}
         <button class="btn btn-leve" data-acao="importar-plano">Importar plano</button>
       </div>
     </div>
-    ${doCliente ? `<div class="filtros ${estado.filtrosAbertos ? 'aberto' : ''}">
-      ${sel('plataforma', 'Plataforma', opcoes.plataformas, filtros.plataforma)}
-      ${sel('flight', 'Flight', opcoes.flights, filtros.flight)}
-      ${sel('produto', 'Campanha / produto', opcoes.produtos, filtros.produto)}
-      ${sel('praca', 'Praça', opcoes.pracas, filtros.praca)}
-      ${sel('situacao', 'Situação', [{ v: 'ativa', r: 'Ativas' }, { v: 'encerrada', r: 'Encerradas' }, { v: 'agendada', r: 'Agendadas' }], filtros.situacao)}
-      ${nFiltros ? '<button class="btn btn-leve btn-mini" data-acao="limpar-filtros">Limpar filtros</button>' : ''}
-    </div>` : ''}
     <nav class="abas" role="tablist">
       ${aba('painel', 'Painel', painel?.placar.comAviso || '', painel?.placar.comAviso > 0)}
-      ${aba('equipe', 'Equipe e avisos', painel?.avisos.avisos.length || '')}
+      ${podeGerirEquipe(db.equipe, db.preferencias.usuario) ? aba('equipe', 'Equipe e avisos', painel?.avisos.avisos.length || '') : aba('equipe', '<span aria-hidden="true">🔒</span> Equipe e avisos')}
       <span class="abas-sep" aria-hidden="true"></span>
       <label class="abas-cliente">Cliente
         <select data-acao-change="trocar-cliente">${clientes.map((c) => `<option value="${esc(c.clienteId)}" ${c.clienteId === ws?.clienteId ? 'selected' : ''}>${esc(c.cliente)}</option>`).join('')}</select></label>
-      ${aba('geral', 'Visão geral')}
-      ${aba('ritmo', 'Ritmo por linha')}
-      ${aba('turmas', 'Turmas')}
       ${aba('alertas', 'Alertas', abertos.length, criticos > 0)}
       ${aba('vinculos', 'Vínculos', pend || '', pend > 0)}
       ${aba('plano', 'Plano e dados', ctx.plano.avisos.filter((a) => a.severidade !== 'info').length || '')}
@@ -126,8 +114,9 @@ export function telaPainel(p, estado, db) {
   const ticker = [...p.contas].filter((c) => c.situacao === 'ativa' && c.indice !== null && c.sentido)
     .sort((a, b) => Math.abs(b.desvio) - Math.abs(a.desvio))
     .map((c) => `<span class="t-item t-${c.sentido}"><b>${esc(c.cliente)}</b> ${esc(c.plataformaNome)} <i>${decimal(c.indice)}</i> ${SENTIDO[c.sentido].seta} ${desvioTexto(c.desvio)}</span>`).join('');
-  const linhaConta = (c) => `<tr class="q-conta ${c.fora.length ? 'q-com-aviso' : ''}" data-abrir-cliente="${esc(c.clienteId)}" data-plataforma="${esc(c.plataforma)}" tabindex="0" title="Abrir ${esc(c.cliente)} · ${esc(c.plataformaNome)}">
-      <td class="q-nome"><span class="q-plat">${esc(c.plataformaNome)}</span>${c.contas.length ? `<span class="q-sub">${esc(c.contas.join(', '))}</span>` : ''}</td>
+  const botao = (clienteId, plataforma, rotulo) => `<button class="btn btn-mini q-botao" data-abrir-cliente="${esc(clienteId)}" data-plataforma="${esc(plataforma)}" aria-label="Visão geral de ${esc(rotulo)}">Visão geral</button>`;
+  const linhaConta = (c) => `<tr class="q-conta ${c.fora.length ? 'q-com-aviso' : ''}">
+      <td class="q-nome"><div class="q-nome-linha"><div><span class="q-plat">${esc(c.plataformaNome)}</span>${c.contas.length ? `<span class="q-sub">${esc(c.contas.join(', '))}</span>` : ''}</div>${botao(c.clienteId, c.plataforma, `${c.cliente} · ${c.plataformaNome}`)}</div></td>
       <td class="q-analista">${esc(nomeDe(equipe, c.analista) || '—')}</td>
       <td class="num">${brl(c.investimento)}</td><td class="num">${brl(c.planejadoAteOntem)}</td><td class="num">${brl(c.gasto)}</td>
       <td class="num q-indice">${c.indice === null ? '—' : decimal(c.indice)}</td>
@@ -139,7 +128,7 @@ export function telaPainel(p, estado, db) {
     </tr>`;
   const linhas = grupos.map((g) => {
     const t = g.total;
-    return `<tr class="q-cliente"><td class="q-nome" colspan="2"><button class="q-link" data-abrir-cliente="${esc(g.clienteId)}">${esc(g.cliente)}</button><span class="q-sub">${esc(nomeDe(equipe, g.analista) || 'sem analista')} · ${g.contas.length} conta(s)</span></td>
+    return `<tr class="q-cliente"><td class="q-nome"><div class="q-nome-linha"><div><span class="q-cliente-nome">${esc(g.cliente)}</span><span class="q-sub">${esc(nomeDe(equipe, g.analista) || 'sem analista')} · ${g.contas.length} conta(s)</span></div>${botao(g.clienteId, '', g.cliente)}</div></td><td></td>
       <td class="num">${brl(t.investimento)}</td><td class="num">${brl(t.planejadoAteOntem)}</td><td class="num">${brl(t.gasto)}</td>
       <td class="num q-indice">${t.indice === null ? '—' : decimal(t.indice)}</td><td></td><td>${barraDesvio(t.desvio, margem)}</td><td class="num">${brl(t.projecaoFim)}</td><td></td>
       <td>${t.sentido ? `<span class="q-status q-${t.sentido}"><b aria-hidden="true">${SENTIDO[t.sentido].seta}</b>${SENTIDO[t.sentido].rotulo}</span>` : ''}</td></tr>
@@ -173,18 +162,46 @@ export function telaPainel(p, estado, db) {
     ${grupos.length ? `<div class="rolagem"><table class="quadro-tabela">
       <thead><tr><th>Cliente · conta</th><th>Analista</th><th class="num">Investimento</th><th class="num">Previsto até ontem</th><th class="num">Usado</th><th class="num">Índice</th><th class="num">Osc. dia</th><th>Desvio</th><th class="num">Projeção</th><th class="num">Fim</th><th>Status</th></tr></thead>
       <tbody>${linhas}</tbody></table></div>` : `<p class="quadro-vazio">Nenhuma conta com esses filtros.${pessoas.length ? '' : ' Cadastre a equipe em “Equipe e avisos” para filtrar por analista.'}</p>`}
-    <p class="quadro-nota">Índice = usado ÷ previsto até ontem (1,00 = no ritmo). Osc. dia = variação do índice em relação ao dia anterior. Clique numa conta para ver as linhas.</p>
+    <p class="quadro-nota">Índice = usado ÷ previsto até ontem (1,00 = no ritmo). Osc. dia = variação do índice em relação ao dia anterior. O botão “Visão geral” abre o cliente ou a conta.</p>
   </section>`;
 }
 
 // ---------------------------------------------------------------- equipe e avisos
+const PAPEL = { analista: 'analista', lideranca: 'liderança direta' };
+
+/** Prévia das mensagens do Operações Bot (também usada na página de teste). */
+export function previaAvisos(p, { link = '', acoes = true } = {}) {
+  const { avisos, semResponsavel, desatualizadas } = p.avisos;
+  return `<section class="bloco"><div class="cabeca-bloco"><div><h2>Prévia dos avisos de ${dataCurta(p.ref)} (${avisos.length})</h2>
+      <p class="sub">O que o Operações Bot enviaria hoje. Quem não tem linha fora da margem não recebe nada.</p></div>
+      ${acoes ? `<div class="acoes-topo"><button class="btn btn-mini" data-acao="exportar-avisos" ${avisos.length ? '' : 'disabled'}>Exportar avisos (.json)</button><button class="btn btn-mini" data-acao="exportar-tudo">Exportar workspace completo</button></div>` : ''}</div>
+    ${semResponsavel.length ? `<div class="aviso atencao">${semResponsavel.length} conta(s) com linhas fora da margem não têm analista cadastrado e não geram aviso: ${esc(semResponsavel.map((c) => `${c.cliente} · ${c.plataformaNome}`).join(', '))}.</div>` : ''}
+    ${desatualizadas.length ? `<div class="aviso atencao">${desatualizadas.length} conta(s) em veiculação estão com o realizado desatualizado e não geram aviso até a carga chegar: ${esc(desatualizadas.map((c) => `${c.cliente} · ${c.plataformaNome}${c.ultimoDiaDados ? ` (dados até ${dataCurta(c.ultimoDiaDados)})` : ' (sem realizado)'}`).join(', '))}.</div>` : ''}
+    ${link ? '' : '<div class="aviso info">Sem link do monitor: as mensagens saem sem o endereço.</div>'}
+    ${avisos.length ? `<div class="chat-lista">${avisos.map((a, i) => `<article class="chat">
+      <div class="chat-avatar" aria-hidden="true">OB</div>
+      <div class="chat-corpo"><div class="chat-meta"><b>Operações Bot</b> <span class="chat-app">App</span> <span class="mudo">para ${esc(a.nome)} · ${PAPEL[a.papel]}</span></div>
+        <div class="chat-balao">${esc(a.texto)}</div>
+        <button class="btn btn-leve btn-mini" data-copiar-aviso="${i}">Copiar texto</button></div>
+    </article>`).join('')}</div>` : '<div class="silencio"><b>Tudo dentro da margem.</b> Nenhuma linha está fora de ±10% perto do fim: hoje o chat fica em silêncio.</div>'}
+  </section>`;
+}
+
+/** Área da liderança fechada para quem não é liderança. */
+export function telaBloqueada() {
+  return `<section class="vazio bloqueio">
+    <h2><span aria-hidden="true">🔒</span> Área da liderança</h2>
+    <p>Equipe e avisos guarda o cadastro do time, o analista de cada cliente e a prévia do que o Operações Bot envia no chat. Só a liderança acessa.</p>
+    <p>Se você é liderança, escolha seu nome em “Você é”, no topo da página.</p>
+  </section>`;
+}
+
 export function telaEquipe(p, db) {
+  if (!podeGerirEquipe(db.equipe, db.preferencias.usuario)) return telaBloqueada();
   const equipe = db.equipe;
   const clientes = Object.values(db.clientes).sort((a, b) => a.cliente.localeCompare(b.cliente, 'pt-BR'));
   const pessoas = equipe.pessoas;
-  const opcoesPessoa = (valor, vazio) => `<option value="">${vazio}</option>${pessoas.filter((x) => x.email).map((x) => `<option value="${esc(x.email)}" ${x.email === valor ? 'selected' : ''}>${esc(x.nome || x.email)}</option>`).join('')}`;
-  const { avisos, semResponsavel, desatualizadas } = p.avisos;
-  const papel = { analista: 'analista', lideranca: 'liderança direta' };
+  const opcoesPessoa = (valor, vazio, lista = pessoas) => `<option value="">${vazio}</option>${lista.filter((x) => x.email).map((x) => `<option value="${esc(x.email)}" ${x.email === valor ? 'selected' : ''}>${esc(x.nome || x.email)}</option>`).join('')}`;
   const link = db.preferencias.linkPainel || '';
   return `<div class="grade grade-2" style="margin-top:0">
     <section class="bloco"><h2>Como os avisos funcionam</h2>
@@ -204,155 +221,60 @@ export function telaEquipe(p, db) {
       </tbody></table></div>` : '<p class="mudo">Nenhum cliente importado.</p>'}
     </section>
   </div>
-  <section class="bloco" style="margin-top:20px"><div class="cabeca-bloco"><div><h2>Equipe (${pessoas.length})</h2><p class="sub">Analistas e lideranças. As mudanças são salvas na hora.</p></div>
+  <section class="bloco" style="margin-top:20px"><div class="cabeca-bloco"><div><h2>Equipe (${pessoas.length})</h2><p class="sub">Analistas e lideranças. Só quem está marcado como liderança (ou é liderança direta de alguém) abre esta área. As mudanças são salvas na hora.</p></div>
       <button class="btn btn-mini" data-acao="adicionar-pessoa">Adicionar pessoa</button></div>
-    ${pessoas.length ? `<div class="rolagem"><table class="dados"><thead><tr><th>Nome</th><th>E-mail (Google Chat)</th><th>Liderança direta</th><th></th></tr></thead><tbody>
+    ${pessoas.length ? `<div class="rolagem"><table class="dados"><thead><tr><th>Nome</th><th>E-mail (Google Chat)</th><th>Liderança</th><th>Liderança direta</th><th></th></tr></thead><tbody>
       ${pessoas.map((x, i) => `<tr><td><input type="text" value="${esc(x.nome)}" data-pessoa="${i}" data-campo="nome" placeholder="Nome e sobrenome" aria-label="Nome"></td>
         <td><input type="email" value="${esc(x.email)}" data-pessoa="${i}" data-campo="email" placeholder="nome@ampla.com.br" aria-label="E-mail"></td>
+        <td><label class="marcar"><input type="checkbox" data-pessoa="${i}" data-campo="lideranca" ${x.lideranca ? 'checked' : ''}> Liderança</label></td>
         <td><select data-pessoa="${i}" data-campo="lider" aria-label="Liderança direta">${opcoesPessoa(x.lider, 'Sem liderança')}</select></td>
         <td><button class="btn btn-leve btn-mini" data-remover-pessoa="${i}">Remover</button></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="mudo">Ninguém cadastrado ainda.</p>'}
   </section>
-  <section class="bloco" style="margin-top:20px"><div class="cabeca-bloco"><div><h2>Prévia dos avisos de ${dataCurta(p.ref)} (${avisos.length})</h2>
-      <p class="sub">O que o Operações Bot enviaria hoje. Quem não tem linha fora da margem não recebe nada.</p></div>
-      <div class="acoes-topo"><button class="btn btn-mini" data-acao="exportar-avisos" ${avisos.length ? '' : 'disabled'}>Exportar avisos (.json)</button><button class="btn btn-mini" data-acao="exportar-tudo">Exportar workspace completo</button></div></div>
-    ${semResponsavel.length ? `<div class="aviso atencao">${semResponsavel.length} conta(s) com linhas fora da margem não têm analista cadastrado e não geram aviso: ${esc(semResponsavel.map((c) => `${c.cliente} · ${c.plataformaNome}`).join(', '))}.</div>` : ''}
-    ${desatualizadas.length ? `<div class="aviso atencao">${desatualizadas.length} conta(s) em veiculação estão com o realizado desatualizado e não geram aviso até a carga chegar: ${esc(desatualizadas.map((c) => `${c.cliente} · ${c.plataformaNome}${c.ultimoDiaDados ? ` (dados até ${dataCurta(c.ultimoDiaDados)})` : ' (sem realizado)'}`).join(', '))}.</div>` : ''}
-    ${link ? '' : '<div class="aviso info">Sem link do monitor: as mensagens saem sem o endereço. Preencha o link acima.</div>'}
-    ${avisos.length ? `<div class="chat-lista">${avisos.map((a, i) => `<article class="chat">
-      <div class="chat-avatar" aria-hidden="true">OB</div>
-      <div class="chat-corpo"><div class="chat-meta"><b>Operações Bot</b> <span class="chat-app">App</span> <span class="mudo">para ${esc(a.nome)} · ${papel[a.papel]}</span></div>
-        <div class="chat-balao">${esc(a.texto)}</div>
-        <button class="btn btn-leve btn-mini" data-copiar-aviso="${i}">Copiar texto</button></div>
-    </article>`).join('')}</div>` : '<p class="mudo">Nenhuma linha fora da margem perto do fim. Hoje o chat fica em silêncio.</p>'}
-  </section>`;
+  <div style="margin-top:20px">${previaAvisos(p, { link })}</div>`;
 }
 
-// ---------------------------------------------------------------- visão geral
+// ---------------------------------------------------------------- visão geral (de um cliente)
+/**
+ * Visão geral enxuta de um cliente: só as linhas em veiculação (os mesmos números do painel),
+ * quatro números, a régua, um gráfico e a lista de linhas. Abre pelo botão "Visão geral" do painel.
+ */
 export function visaoGeral(ctx) {
-  const { total: t, ref, ws } = ctx;
-  if (!ctx.metricas.length) return `<section class="vazio"><h2>Nenhuma linha com esses filtros</h2><p>Ajuste os filtros acima ou limpe-os para ver o plano inteiro.</p></section>`;
-  const ontem = addDias(ref, -1);
-  const deveria = t.investimento ? t.planejadoAteOntem / t.investimento : 0;
-  const semRealizado = !ws.realizado.length;
-  const frase = semRealizado
-    ? `<b>${esc(ws.cliente)}</b> tem ${brl(t.investimento)} de investimento em plataforma no plano. Ainda não há realizado carregado.`
-    : `Até ${dataCurta(ontem)}, <b>${esc(ws.cliente)}</b> usou <b>${brl(t.gasto)}</b> de ${brl(t.investimento)} em plataforma, quando o plano previa ${brl(t.planejadoAteOntem)} até aqui.`;
-  const leitura = semRealizado ? 'Suba o CSV do realizado ou gere dados de demonstração para ver o ritmo.'
-    : t.indice === null ? 'Nenhuma linha começou ainda.'
-    : `Índice de ritmo ${decimal(t.indice)}: ${t.status.codigo === 'ok' ? 'dentro da tolerância de ±10% do plano' : t.status.codigo.endsWith('under') ? 'gastando menos do que o planejado' : 'gastando mais do que o planejado'}.`;
-  const mes = nomeMes(ref);
+  const { ref, ws, filtros, opcoes, cfg } = ctx;
   const ativas = ctx.metricas.filter((m) => m.situacao === 'ativa');
-  const orfao = ctx.alloc.orfaos.reduce((s, r) => s + r.gasto, 0);
-  const semVeic = ctx.metricas.filter((m) => m.status.codigo === 'sem-veiculacao').length;
-  const porPlat = agruparPor(ctx.metricas, (m) => m.linha.plataforma, (m) => m.linha.plataforma);
-  const topAlertas = ctx.alertasFiltrados.filter((a) => a.estado === 'aberto').slice(0, 5);
-  return `
-  <section class="abertura">
-    <p class="frase">${frase}<small>${esc(leitura)} ${chip(t.status)}</small></p>
-    ${regua(t, { grande: true })}
-    <div class="legenda-regua"><span><span class="amostra-agora"></span>onde deveria estar até ontem</span><span><span class="amostra-faixa"></span>tolerância de ±10% do plano</span><span>cor fria = abaixo do ritmo · cor quente = acima</span></div>
-    <dl class="fatos">
-      <div><dt>Projeção até o fim dos flights</dt><dd>${brl(t.projecaoFim)}<small>${t.desvioProjetado === null ? '' : `${t.desvioProjetado >= 0 ? '+' : ''}${pct(t.desvioProjetado)} do plano · média dos últimos 7 dias`}</small></dd></div>
-      <div><dt>Previsto até o fim de ${esc(mes)}</dt><dd>${brl(t.previstoNoMes)}<small>planejado no mês: ${brl(t.planejadoNoMes)} · usado: ${brl(t.gastoNoMes)}</small></dd></div>
-      <div><dt>Diária de hoje (${ativas.length} linha${ativas.length === 1 ? '' : 's'} ativa${ativas.length === 1 ? '' : 's'})</dt><dd>${brl(t.diariaNecessaria)}<small>necessária · média atual ${brl(t.media)} · plano ${brl(t.diariaPlan)}</small></dd></div>
-      <div><dt>Pendências de dados</dt><dd>${semVeic + (orfao > 0 ? 1 : 0)}<small>${semVeic} linha(s) sem veiculação · ${brl(orfao)} sem vínculo</small></dd></div>
-    </dl>
-  </section>
-  <div class="grade grade-2">
-    <section class="bloco"><h2>Verba acumulada</h2><p class="sub">Planejado ideal, realizado e projeção pela média dos últimos 7 dias. A faixa verde é a tolerância de ±10%.</p><div class="grafico"><canvas id="g-geral-acum"></canvas></div></section>
-    <section class="bloco"><h2>Gasto diário</h2><p class="sub">Barras: gasto de cada dia. Linhas: diária planejada e, a partir de hoje, a diária necessária para fechar o plano.</p><div class="grafico"><canvas id="g-geral-dia"></canvas></div></section>
-  </div>
-  <div class="grade grade-2">
-    <section class="bloco"><div class="cabeca-bloco"><div><h2>Alertas abertos</h2><p class="sub">Os mais graves primeiro. Cada um traz a ação com valor e prazo.</p></div><button class="btn btn-mini" data-aba="alertas">Ver todos</button></div>
-      ${topAlertas.length ? `<div class="lista-alertas">${topAlertas.map((a) => cartaoAlerta(a, true)).join('')}</div>` : '<p class="mudo">Nenhum alerta aberto para esses filtros.</p>'}</section>
-    <section class="bloco"><h2>Por plataforma</h2><p class="sub">Uma conta por plataforma, com todas as linhas do filtro.</p>
-      <div class="rolagem"><table class="dados"><thead><tr><th>Plataforma</th><th class="num">Investimento</th><th class="num">Usado</th><th>Ritmo</th><th class="num">Projeção</th><th>Status</th></tr></thead>
-      <tbody>${porPlat.map((g) => `<tr><td>${esc(g.rotulo)}</td><td class="num">${brl(g.total.investimento)}</td><td class="num">${brl(g.total.gasto)}</td><td>${regua(g.total)}</td><td class="num">${brl(g.total.projecaoFim)}</td><td>${chip(g.total.status)}</td></tr>`).join('')}</tbody></table></div>
-    </section>
-  </div>`;
-}
-
-// ---------------------------------------------------------------- tabela de ritmo
-const COLS = `<tr><th>Nome</th><th>Período</th><th class="num">Investimento</th><th class="num">Usado</th><th class="num">Saldo</th><th>Ritmo</th><th class="num">Índice</th><th class="num">Média 7d</th><th class="num">Diária necessária</th><th class="num">Projeção</th><th>Status</th></tr>`;
-
-function linhaTabela(x, nome, { classe = '', nivel = 0, chave = '', expansivel = false, aberto = false, linhaId = null } = {}) {
-  const periodo = x.inicio ? `${dataCurta(x.inicio)} a ${dataCurta(x.fim)}` : '';
-  const exp = expansivel ? `<button class="expansor" data-expandir="${esc(chave)}" aria-expanded="${aberto}" aria-label="${aberto ? 'Recolher' : 'Expandir'}">${aberto ? '▾' : '▸'}</button>` : '<span class="expansor"></span>';
-  const clic = linhaId ? ` class="${classe} clicavel" data-detalhe="${esc(linhaId)}"` : ` class="${classe}"`;
-  return `<tr${clic}><td class="nome recuo-${nivel}">${exp}${nome}</td><td>${periodo}</td><td class="num">${brl(x.investimento)}</td><td class="num">${brl(x.gasto)}</td><td class="num">${brl(x.saldo)}</td>
-    <td>${regua(x)}</td><td class="num">${x.indice === null || x.indice === undefined ? '—' : decimal(x.indice)}</td><td class="num">${brl(x.media)}</td><td class="num">${x.diariaNecessaria ? brl(x.diariaNecessaria) : '—'}</td>
-    <td class="num">${brl(x.projecaoFim)}</td><td>${chip(x.status)}</td></tr>`;
-}
-
-export function tabelaRitmo(ctx) {
-  const { estado, nomes } = ctx;
-  const agrup = estado.agrupamento;
-  const nivel1 = agrup === 'flight' ? (m) => m.linha.flightId : (m) => m.linha.plataforma;
-  const rot1 = agrup === 'flight' ? (m) => rotuloFlight(m.linha.aba) : (m) => m.linha.plataforma;
-  const nivel2 = agrup === 'flight' ? (m) => m.linha.produto : (m) => m.linha.produto;
-  const linhas = [];
-  for (const g1 of agruparPor(ctx.metricas, nivel1, rot1)) {
-    const k1 = `g1:${g1.chave}`;
-    const a1 = !estado.recolhidos.has(k1);
-    linhas.push(linhaTabela({ ...g1.total, media: g1.total.media }, `<span class="forte">${esc(g1.rotulo)}</span> <span class="mudo">${g1.itens.length} linha(s)</span>`, { classe: 'grupo-1', chave: k1, expansivel: true, aberto: a1 }));
-    if (!a1) continue;
-    for (const g2 of agruparPor(g1.itens, nivel2, nivel2)) {
-      const k2 = `${k1}|g2:${g2.chave}`;
-      const a2 = !estado.recolhidos.has(k2);
-      linhas.push(linhaTabela(g2.total, `${esc(g2.rotulo)} <span class="mudo">${g2.itens.length}</span>`, { classe: 'grupo-2', nivel: 1, chave: k2, expansivel: true, aberto: a2 }));
-      if (!a2) continue;
-      for (const m of g2.itens) {
-        const k3 = `l:${m.linhaId}`;
-        const a3 = estado.expandidos.has(k3);
-        const x = { ...m, inicio: m.linha.inicio, fim: m.linha.fim };
-        const nome = `${esc(rotuloLinha(m.linha))}${m.entidades.length ? ` <span class="mudo">· ${m.entidades.length} conjunto(s)</span>` : ''}`;
-        linhas.push(linhaTabela(x, nome, { nivel: 2, chave: k3, expansivel: m.entidades.length > 0, aberto: a3, linhaId: m.linhaId }));
-        if (!a3) continue;
-        for (const e of m.entidades) {
-          const n = nomes.get(e.chave);
-          linhas.push(`<tr class="conjunto"><td class="nome recuo-3"><span class="expansor"></span>${esc(n?.conjuntoNome || e.chave)} <span class="mudo">· ${esc(n?.campanhaNome || '')}</span></td><td>${e.dias} dia(s)</td><td class="num">—</td><td class="num">${brl(e.gasto)}</td><td></td><td></td><td></td><td></td>
-            <td class="num" title="Orçamento diário configurado na plataforma (último dia)">${e.orcamentoDiario ? `config. ${brl(e.orcamentoDiario)}` : '—'}</td><td></td><td class="mudo">${m.gasto ? pct(e.gasto / m.gasto, 0) : ''} da linha</td></tr>`);
-        }
-      }
-    }
+  const t = agregar(ativas, cfg);
+  const plat = filtros.plataforma;
+  const seletor = `<label class="campo">Plataforma<select data-filtro="plataforma"><option value="">Todas</option>${opcoes.plataformas.map((o) => `<option value="${esc(o.v)}" ${o.v === plat ? 'selected' : ''}>${esc(configPlataforma(o.v).nome)}</option>`).join('')}</select></label>`;
+  const topo = `<div class="vg-topo">
+      <button class="btn" data-aba="painel"><span aria-hidden="true">←</span> Voltar ao painel</button>
+      <div class="vg-titulo"><h2>${esc(ws.cliente)}</h2><p>${plat ? esc(configPlataforma(plat).nome) : 'Todas as plataformas'} · linhas em veiculação · dados até ${dataCurta(addDias(ref, -1))}</p></div>
+      ${seletor}
+    </div>`;
+  if (!ativas.length) {
+    return `<section class="vg">${topo}<section class="vazio"><h2>Nenhuma linha em veiculação</h2><p>${ws.realizado.length ? 'As linhas deste filtro já acabaram ou ainda não começaram.' : 'Ainda não há realizado carregado para este cliente.'}</p></section></section>`;
   }
-  const t = ctx.total;
-  return `<section>
-    <div class="cabeca-bloco" style="margin-bottom:12px">
-      <div><label class="campo">Agrupar por
-        <select data-acao-change="agrupar"><option value="plataforma" ${agrup !== 'flight' ? 'selected' : ''}>Plataforma › campanha › linha › conjunto</option><option value="flight" ${agrup === 'flight' ? 'selected' : ''}>Flight › campanha › linha › conjunto</option></select></label></div>
-      <div class="acoes-topo"><button class="btn btn-mini" data-acao="expandir-tudo">Abrir conjuntos</button><button class="btn btn-mini" data-acao="recolher-tudo">Recolher</button><button class="btn btn-mini" data-acao="exportar-pacing">Exportar CSV</button></div>
-    </div>
-    <div class="rolagem"><table class="dados"><thead>${COLS}</thead><tbody>
-      ${linhaTabela({ ...t }, `<span class="forte">Total filtrado</span>`, { classe: 'grupo-1' })}
-      ${linhas.join('')}
-    </tbody></table></div>
-    <p class="dica">Clique em uma linha do plano para ver gráficos, conjuntos e alertas.</p>
+  const desvio = t.indice === null ? null : t.indice - 1;
+  const projDesvio = t.desvioProjetado;
+  const linhas = [...ativas].sort((a, b) => a.linha.fim.localeCompare(b.linha.fim)).map((m) => `<tr>
+      <td class="nome">${esc(rotuloCurto(m.linha) || rotuloLinha(m.linha))}<span class="vg-sub">${esc(configPlataforma(m.linha.plataforma).nome)}</span></td>
+      <td>${dataCurta(m.linha.fim)}<span class="vg-sub">${m.diasRestantes === 1 ? 'acaba hoje' : `faltam ${m.diasRestantes} d`}</span></td>
+      <td class="num">${brl(m.gasto)}<span class="vg-sub">de ${brl(m.planejadoAteOntem)}</span></td>
+      <td class="num forte">${m.indice === null ? '—' : decimal(m.indice)}</td>
+      <td>${chip(m.status)}${foraDaMargem(m, cfg) ? '<span class="vg-aviso">Aviso no chat</span>' : ''}</td>
+      <td><button class="btn btn-mini" data-detalhe="${esc(m.linhaId)}">Detalhes</button></td></tr>`).join('');
+  return `<section class="vg">${topo}
+    <dl class="vg-cartoes">
+      <div><dt>Investimento</dt><dd>${brl(t.investimento)}</dd><small>${ativas.length} linha(s) em veiculação</small></div>
+      <div><dt>Usado até ontem</dt><dd>${brl(t.gasto)}</dd><small>previsto: ${brl(t.planejadoAteOntem)}</small></div>
+      <div class="vg-ritmo s-${esc(t.status.codigo)}"><dt>Ritmo</dt><dd>${t.indice === null ? '—' : decimal(t.indice)}</dd><small>${chip(t.status)}${desvio === null ? '' : ` ${desvio >= 0 ? '+' : '−'}${pct(Math.abs(desvio), 0)}`}</small></div>
+      <div><dt>Projeção até o fim</dt><dd>${brl(t.projecaoFim)}</dd><small>${projDesvio === null ? '' : `${projDesvio >= 0 ? '+' : '−'}${pct(Math.abs(projDesvio), 0)} do investimento`}</small></div>
+    </dl>
+    <section class="bloco">${regua(t, { grande: true, tolerancia: cfg.avisos.margem })}</section>
+    <section class="bloco"><h2>Verba acumulada</h2><p class="sub">Linha tracejada: o previsto. Linha cheia: o usado. Pontilhada: para onde vai no ritmo atual. Faixa verde: ±${pct(cfg.avisos.margem, 0)}.</p><div class="grafico"><canvas id="g-geral-acum"></canvas></div></section>
+    <section class="bloco"><h2>Linhas em veiculação</h2>
+      <div class="rolagem"><table class="dados"><thead><tr><th>Linha</th><th>Fim</th><th class="num">Usado / previsto</th><th class="num">Índice</th><th>Status</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>
+    </section>
   </section>`;
-}
-
-// ---------------------------------------------------------------- turmas
-export function telaTurmas(ctx) {
-  const grupos = agruparPor(ctx.metricas, (m) => ctx.turmas.get(m.linhaId)?.chave, (m) => ctx.turmas.get(m.linhaId)?.rotulo);
-  grupos.sort((a, b) => (ctx.turmas.get(a.itens[0].linhaId)?.dataTurma || '9') .localeCompare(ctx.turmas.get(b.itens[0].linhaId)?.dataTurma || '9'));
-  const linhas = grupos.map((g) => {
-    const dt = ctx.turmas.get(g.itens[0].linhaId)?.dataTurma;
-    const dias = dt ? diffDias(ctx.ref, dt) : null;
-    const k = `t:${g.chave}`;
-    const aberto = ctx.estado.expandidos.has(k);
-    const linhaG = `<tr class="grupo-2"><td class="nome"><button class="expansor" data-expandir="${esc(k)}" aria-expanded="${aberto}">${aberto ? '▾' : '▸'}</button>${esc(g.rotulo)}</td>
-      <td>${dt ? `${dataBR(dt)}${dias !== null ? ` <span class="mudo">(${dias >= 0 ? `em ${dias} dia(s)` : 'já começou'})</span>` : ''}` : '<span class="mudo">sem data</span>'}</td>
-      <td class="num">${g.itens.length}</td><td class="num">${brl(g.total.investimento)}</td><td class="num">${brl(g.total.gasto)}</td><td>${regua(g.total)}</td><td class="num">${brl(g.total.projecaoFim)}</td>
-      <td>${chip(g.total.status)}</td></tr>`;
-    const filhas = aberto ? g.itens.map((m) => `<tr class="clicavel" data-detalhe="${esc(m.linhaId)}"><td class="nome recuo-1"><span class="expansor"></span>${esc(rotuloFlight(m.linha.aba))}</td><td>${dataCurta(m.linha.inicio)} a ${dataCurta(m.linha.fim)}</td><td></td>
-      <td class="num">${brl(m.investimento)}</td><td class="num">${brl(m.gasto)}</td><td>${regua(m)}</td><td class="num">${brl(m.projecaoFim)}</td><td>${chip(m.status)}</td></tr>`).join('') : '';
-    return linhaG + filhas;
-  });
-  return `<section>
-    <p class="dica" style="margin-top:0">Cada turma soma a verba de todos os flights em que aparece (ex.: Set/1 + Set/2 + Out). Linhas do mesmo produto e praça que compartilham um código de turma ficam juntas.</p>
-    <div class="rolagem"><table class="dados"><thead><tr><th>Turma</th><th>Início da turma</th><th class="num">Flights</th><th class="num">Investimento</th><th class="num">Usado</th><th>Ritmo</th><th class="num">Projeção</th><th>Status</th></tr></thead>
-    <tbody>${linhas.join('')}</tbody></table></div></section>`;
 }
 
 // ---------------------------------------------------------------- alertas

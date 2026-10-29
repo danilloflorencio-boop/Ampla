@@ -4,10 +4,10 @@ import { hojeSP, addDias, dataCurta, brl, normalizar } from '../core/format.js';
 import { lerPlano, diffPlanos, rotuloLinha } from '../core/plano.js';
 import { lerCSV, normalizarRealizado, mesclarRealizado, entidadesDoRealizado, ultimaExtracao, paraCSV, chaveEntidade } from '../core/realizado.js';
 import { sugerirVinculos, aplicarSugestoes, alocarRealizado } from '../core/vinculo.js';
-import { calcularTudo, agregar, indexarAlocacoes, series, chavesDeTurma } from '../core/pacing.js';
+import { calcularTudo, agregar, indexarAlocacoes, series } from '../core/pacing.js';
 import { avaliarRegras, aplicarDecisoes } from '../core/regras.js';
 import { gerarRealizadoMock } from '../core/mock.js';
-import { montarPainel, filtrarPainel, soPacing } from '../core/painel.js';
+import { montarPainel, filtrarPainel, soPacing, podeGerirEquipe, ehLideranca } from '../core/painel.js';
 import { montarAvisos } from '../core/avisos.js';
 import { configDoCliente } from '../config/config.js';
 import * as armazenamento from './storage.js';
@@ -27,12 +27,8 @@ const estado = {
   filtroPainel: { ...FILTRO_PAINEL_VAZIO, ...(db0.preferencias.filtroPainel || {}) },
   filtros: { plataforma: '', flight: '', produto: '', praca: '', situacao: '' },
   filtroAlertas: { estado: 'aberto', severidade: '', regra: '' },
-  agrupamento: 'plataforma',
-  expandidos: new Set(),
-  recolhidos: new Set(),
   detalhe: null,
   pendente: null,
-  filtrosAbertos: false,
 };
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -109,7 +105,6 @@ function calcular() {
   return {
     db: estado.db, ws: w, plano, cfg, ref, filtros: f, opcoes, estado, entidades, nomes, sugestoes, alloc,
     metricasTodas, metricas, total, alertas, alertasFiltrados, ultimaExtracao: ext, pendenciasVinculo,
-    turmas: chavesDeTurma(plano.linhas),
   };
 }
 
@@ -140,7 +135,7 @@ function render() {
   const c = ctxAtual;
   const telas = {
     painel: () => V.telaPainel(painelAtual, estado, estado.db), equipe: () => V.telaEquipe(painelAtual, estado.db),
-    geral: V.visaoGeral, ritmo: V.tabelaRitmo, turmas: V.telaTurmas, alertas: V.telaAlertas, vinculos: V.telaVinculos, plano: V.telaPlano,
+    geral: V.visaoGeral, alertas: V.telaAlertas, vinculos: V.telaVinculos, plano: V.telaPlano,
   };
   app.innerHTML = `${V.topo(c, painelAtual)}<main id="principal" class="${ABAS_GERAIS.includes(estado.aba) ? 'principal-geral' : ''}">${(telas[estado.aba] || V.visaoGeral)(c)}</main><div id="painel">${estado.detalhe ? V.painelLinha(c, estado.detalhe) : ''}</div>`;
   requestAnimationFrame(desenharGraficos);
@@ -159,15 +154,15 @@ function abrirCliente(clienteId, plataforma = '') {
   return true;
 }
 
+const podeGerir = () => podeGerirEquipe(estado.db.equipe, estado.db.preferencias.usuario);
 const salvarFiltroPainel = () => { estado.db.preferencias.filtroPainel = { analista: estado.filtroPainel.analista, lideranca: estado.filtroPainel.lideranca }; persistir(); };
 
 function desenharGraficos() {
   const c = ctxAtual;
   if (!c) return;
-  if (estado.aba === 'geral' && c.metricas.length) {
-    const s = series(c.metricas, c.ref, c.cfg);
-    graficoAcumulado($('#g-geral-acum'), s);
-    graficoDiario($('#g-geral-dia'), s);
+  const ativas = c.metricas.filter((m) => m.situacao === 'ativa');
+  if (estado.aba === 'geral' && ativas.length) {
+    graficoAcumulado($('#g-geral-acum'), series(ativas, c.ref, c.cfg));
   }
   if (estado.detalhe) {
     const m = c.metricasTodas.find((x) => x.linhaId === estado.detalhe);
@@ -295,17 +290,6 @@ function gerarMock() {
   toast('Dados de demonstração gerados até ontem.');
 }
 
-function exportarPacing() {
-  const c = ctxAtual; if (!c) return;
-  const cab = ['flight', 'plataforma', 'produto', 'praca', 'codigo', 'inicio', 'fim', 'situacao', 'status', 'investimento_plataforma', 'usado', 'saldo', 'planejado_ate_ontem', 'indice', 'media_7d', 'diaria_necessaria', 'projecao_fim', 'justificativa'];
-  const r = (v) => (v === null || v === undefined ? '' : typeof v === 'number' ? String(v) : `"${String(v).replace(/"/g, '""')}"`);
-  const c2 = (v) => (v === null || v === undefined ? '' : (v / 100).toFixed(2));
-  const linhas = c.metricas.map((m) => [m.linha.aba, m.linha.plataforma, m.linha.produto, m.linha.praca, m.linha.codigoRaw.replace(/\s+/g, ' '), m.linha.inicio, m.linha.fim, m.situacao, m.status.rotulo,
-    c2(m.investimento), c2(m.gasto), c2(m.saldo), c2(m.planejadoAteOntem), m.indice === null ? '' : m.indice.toFixed(3), c2(m.media), c2(m.diariaNecessaria), c2(m.projecaoFim),
-    c.ws.justificativas[m.linhaId] || ''].map(r).join(','));
-  baixar(`pacing_${c.ws.clienteId}_${c.ref}.csv`, [cab.join(','), ...linhas].join('\n'), 'text/csv');
-}
-
 function textoAcoesAbertas() {
   const c = ctxAtual;
   const abertos = c.alertasFiltrados.filter((a) => a.estado === 'aberto' && a.severidade !== 'info');
@@ -314,8 +298,11 @@ function textoAcoesAbertas() {
 }
 
 // ------------------------------------------------------------------ eventos
+const ACOES_DA_LIDERANCA = new Set(['adicionar-pessoa', 'exportar-avisos', 'exportar-tudo']);
+
 function acao(nome, el) {
   const w = ws();
+  if (ACOES_DA_LIDERANCA.has(nome) && !podeGerir()) return toast('Área da liderança.');
   switch (nome) {
     case 'importar-plano': return $('#in-plano').click();
     case 'importar-realizado': return w ? $('#in-real').click() : toast('Importe um plano primeiro.');
@@ -324,11 +311,6 @@ function acao(nome, el) {
     case 'gerar-mock': return gerarMock();
     case 'confirmar-plano': return confirmarPlano();
     case 'confirmar-realizado': return confirmarRealizado();
-    case 'alternar-filtros': estado.filtrosAbertos = !estado.filtrosAbertos; return render();
-    case 'limpar-filtros': estado.filtros = { plataforma: '', flight: '', produto: '', praca: '', situacao: '' }; return render();
-    case 'expandir-tudo': ctxAtual.metricas.forEach((m) => estado.expandidos.add(`l:${m.linhaId}`)); estado.recolhidos.clear(); return render();
-    case 'recolher-tudo': estado.expandidos.clear(); return render();
-    case 'exportar-pacing': return exportarPacing();
     case 'copiar-acoes': return copiar(textoAcoesAbertas());
     case 'aceitar-altas': {
       const r = aplicarSugestoes(w.vinculos, ctxAtual.sugestoes, 'alta');
@@ -369,16 +351,6 @@ function decidir(id, tipo) {
 
 document.addEventListener('click', (ev) => {
   const t = ev.target;
-  const exp = t.closest('[data-expandir]');
-  if (exp) {
-    const k = exp.dataset.expandir;
-    const conj = k.startsWith('g1:') ? estado.recolhidos : estado.expandidos;
-    const inverte = k.startsWith('g1:');
-    if (inverte) { conj.has(k) ? conj.delete(k) : conj.add(k); }
-    else if (k.includes('|g2:')) { estado.recolhidos.has(k) ? estado.recolhidos.delete(k) : estado.recolhidos.add(k); }
-    else { conj.has(k) ? conj.delete(k) : conj.add(k); }
-    return render();
-  }
   const abrir = t.closest('[data-abrir-cliente]');
   if (abrir) return abrirCliente(abrir.dataset.abrirCliente, abrir.dataset.plataforma || '');
   const el = t.closest('[data-copiar-aviso],[data-remover-pessoa],[data-aba],[data-acao],[data-detalhe],[data-fechar-painel],[data-decidir],[data-copiar],[data-aceitar-sugestao],[data-editar-vinculo],[data-desvincular],[data-salvar-vinculo],[data-fechar-dialogo],[data-salvar-justificativa],[data-salvar-nota]');
@@ -387,11 +359,12 @@ document.addEventListener('click', (ev) => {
   const w = ws();
   if (d.copiarAviso !== undefined) { const a = painelAtual?.avisos.avisos[Number(d.copiarAviso)]; return a && copiar(a.texto); }
   if (d.removerPessoa !== undefined) {
+    if (!podeGerir()) return toast('Área da liderança.');
     const [p] = estado.db.equipe.pessoas.splice(Number(d.removerPessoa), 1);
     if (p?.email) trocarEmail(p.email, null);
     persistir(); return render();
   }
-  if (d.aba) { estado.aba = d.aba; estado.detalhe = null; render(); window.scrollTo({ top: 0 }); return; }
+  if (d.aba) { estado.aba = d.aba; if (d.aba !== 'geral') estado.filtros.plataforma = ''; estado.detalhe = null; render(); window.scrollTo({ top: 0 }); return; }
   if (d.acao) return acao(d.acao, el);
   if (d.detalhe) { estado.detalhe = d.detalhe; return render(); }
   if (el.hasAttribute('data-fechar-painel')) { estado.detalhe = null; return render(); }
@@ -437,6 +410,7 @@ function trocarEmail(antigo, novo) {
 document.addEventListener('change', (ev) => {
   const el = ev.target;
   if (el.dataset.filtroPainel !== undefined) { estado.filtroPainel[el.dataset.filtroPainel] = el.value; salvarFiltroPainel(); return render(); }
+  if ((el.dataset.analistaCliente !== undefined || el.dataset.pessoa !== undefined || el.dataset.acaoChange === 'link-painel') && !podeGerir()) { toast('Área da liderança.'); return render(); }
   if (el.dataset.analistaCliente !== undefined) {
     const w = estado.db.clientes[el.dataset.analistaCliente];
     if (w) { w.analista = el.value || null; persistir(); render(); }
@@ -452,6 +426,11 @@ document.addEventListener('change', (ev) => {
       if (p.email) trocarEmail(p.email, novo || null);
       p.email = novo;
     } else if (campo === 'lider') p.lider = el.value && el.value !== p.email ? el.value : null;
+    else if (campo === 'lideranca') {
+      p.lideranca = el.checked;
+      // não deixa quem está usando se trancar fora da área
+      if (!podeGerir()) { p.lideranca = true; toast('Você perderia o acesso a esta área. Marque outra pessoa como liderança antes.'); }
+    }
     else p.nome = el.value.trim();
     persistir(); return render();
   }
@@ -462,9 +441,16 @@ document.addEventListener('change', (ev) => {
       estado.db.clienteAtivo = el.value; estado.detalhe = null;
       if (ABAS_GERAIS.includes(estado.aba)) estado.aba = 'geral';
       persistir(); return render();
+    case 'trocar-usuario': {
+      const u = el.value || null;
+      estado.db.preferencias.usuario = u;
+      // cada um abre o painel na própria carteira: analista nas contas dele, liderança no time
+      estado.filtroPainel = { ...FILTRO_PAINEL_VAZIO, ...(u ? (ehLideranca(estado.db.equipe, u) ? { lideranca: u } : { analista: u }) : {}) };
+      salvarFiltroPainel();
+      persistir(); return render();
+    }
     case 'link-painel': estado.db.preferencias.linkPainel = el.value.trim(); persistir(); return render();
     case 'trocar-ref': if (el.value) { estado.ref = el.value; render(); } return;
-    case 'agrupar': estado.agrupamento = el.value; return render();
     default:
   }
   if (el.id === 'in-plano' && el.files[0]) { aoEscolherPlano(el.files[0]); el.value = ''; }
@@ -487,8 +473,6 @@ document.addEventListener('input', (ev) => {
 });
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape' && estado.detalhe) { estado.detalhe = null; render(); }
-  const linha = ev.target.closest?.('tr[data-abrir-cliente]');
-  if (linha && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); abrirCliente(linha.dataset.abrirCliente, linha.dataset.plataforma || ''); }
 });
 
 render();

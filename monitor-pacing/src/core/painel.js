@@ -204,6 +204,22 @@ export function agruparPorCliente(contas, cfg = CONFIG_PADRAO) {
   }).sort((a, b) => b.total.nFora - a.total.nFora || a.cliente.localeCompare(b.cliente, 'pt-BR'));
 }
 
+/** É liderança? Marcada assim no cadastro ou liderança direta de alguém da equipe. */
+export function ehLideranca(equipe, email) {
+  if (!email) return false;
+  return (equipe?.pessoas || []).some((p) => (p.email === email && p.lideranca) || p.lider === email);
+}
+
+/**
+ * "Equipe e avisos" é área da liderança. Enquanto não houver nenhuma liderança cadastrada,
+ * fica aberta, para alguém conseguir fazer o primeiro cadastro.
+ */
+export function podeGerirEquipe(equipe, email) {
+  const pessoas = equipe?.pessoas || [];
+  const temLideranca = pessoas.some((p) => p.email && ehLideranca(equipe, p.email));
+  return !temLideranca || ehLideranca(equipe, email);
+}
+
 /** Pessoas lideradas diretamente por `email` (sem contar a própria pessoa). */
 export const liderados = (equipe, email) => (equipe?.pessoas || []).filter((p) => p.lider === email).map((p) => p.email);
 

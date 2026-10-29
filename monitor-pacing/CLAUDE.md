@@ -10,7 +10,7 @@ da tabela = uma veiculação). Somente leitura nas plataformas e sem IA no núcl
 ## Comandos
 - `npm test`: testes do núcleo (`node --test`). Rodar após qualquer mudança em `src/core` ou `src/config`.
 - `npm run dev`: servidor estático local (porta 5173).
-- `npm run build`: `dist/monitor-pacing.html`, arquivo único.
+- `npm run build`: `dist/monitor-pacing.html` e `dist/teste-painel.html` (página de teste do painel), arquivos únicos.
 - `node tools/gerar_demo.mjs`: regenera `src/demo/planoDemo.js` se o parser ou a fixture mudarem.
 - `python3 tools/gerar_fixture_sebrae.py`: regenera a fixture .xlsx.
 - `node tools/avisos.mjs workspace.json [--ref AAAA-MM-DD]`: avisos do dia em JSON, para o Operações Bot.
@@ -31,6 +31,12 @@ da tabela = uma veiculação). Somente leitura nas plataformas e sem IA no núcl
 - **Só pacing.** Nada de KPI (custo unitário, resultado, leads) nas telas nem nos avisos.
 - **O app é consultivo.** Quem avisa é o chat, e só fora da margem perto do fim (`docs/AVISOS.md`).
   Dado desatualizado nunca vira aviso.
+- Navegação: Painel e Equipe e avisos no menu; a Visão geral abre pelo botão do painel (nada de
+  navegar ao clicar na linha). Ritmo por linha e Turmas saíram: o painel cumpre essa função.
+- Equipe e avisos é da liderança (`podeGerirEquipe`). Sem login, o bloqueio vale pela pessoa escolhida
+  em "Você é"; vira restrição de verdade quando houver backend/login.
+- Caso novo de pacing ou de aviso entra também em `src/demo/cenarios.js`, com o esperado: o teste
+  `tests/cenarios.test.js` confere o roteiro inteiro.
 
 ## Glossário
 flight = aba do plano · linha = uma linha da tabela PLANO DE MÍDIA · turma = código EV-xxxxx ·

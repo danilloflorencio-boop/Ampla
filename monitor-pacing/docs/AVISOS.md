@@ -24,7 +24,12 @@ limites ficam em `src/config/config.js` (`avisos.margem` e `avisos.diasParaFim`)
 | Liderança direta do analista | Overview das contas do time com linhas fora da margem: estado da conta, projeção e quantas linhas ajustar até amanhã |
 
 Quem não tem nada fora da margem não recebe mensagem. O cadastro de analistas e lideranças,
-e o analista de cada cliente, ficam na tela **Equipe e avisos**.
+e o analista de cada cliente, ficam na tela **Equipe e avisos**, que só a liderança abre (marcada
+como liderança no cadastro ou liderança direta de alguém). Enquanto não houver login, a pessoa se
+identifica em "Você é"; o bloqueio evita mudança por engano, mas não é controle de acesso.
+
+Para ver todos os casos de uma vez, abra `dist/teste-painel.html`: 12 clientes fictícios, um
+cenário com problemas e outro com tudo no ritmo (o chat fica em silêncio).
 
 ## Valor do ajuste
 
