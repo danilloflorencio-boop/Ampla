@@ -25,6 +25,14 @@ export function calcularCliente(ws, ref) {
 }
 
 /**
+ * Analista responsável por uma conta (cliente × plataforma). A liderança pode associar cada conta
+ * a uma pessoa (`ws.analistaPorConta[plataforma]`); sem isso, vale o analista do cliente.
+ */
+export function analistaDaConta(ws, plataforma) {
+  return ws?.analistaPorConta?.[plataforma] || ws?.analista || null;
+}
+
+/**
  * A linha merece aviso no chat? Só quando está ativa, saiu da margem (±10% por padrão)
  * e faltam até N dias para acabar (10 por padrão, contando hoje). Antes da janela final
  * o ritmo ainda oscila e tem tempo de se acertar.
@@ -121,7 +129,8 @@ export function contasDoCliente(ws, ref) {
       id: `${ws.clienteId}|${plat}`,
       clienteId: ws.clienteId,
       cliente: ws.cliente,
-      analista: ws.analista || null,
+      analista: analistaDaConta(ws, plat),
+      analistaProprio: !!ws.analistaPorConta?.[plat],
       plataforma: plat,
       plataformaNome: configPlataforma(plat).nome,
       contas,
@@ -158,7 +167,17 @@ export function montarPainel(workspaces, ref) {
   return { ref, contas, placar: placar(contas) };
 }
 
-export function placar(contas) {
+function saude(contas, cfg) {
+  const previsto = contas.reduce((s, c) => s + c.planejadoAteOntem, 0);
+  const saude = previsto > 0 ? contas.reduce((s, c) => s + c.gasto, 0) / previsto : null;
+  return { saude, saudeSentido: sentido(saude, cfg) };
+}
+
+/**
+ * Placar do topo do painel. Saúde geral = usado ÷ previsto até ontem, somando as contas em
+ * veiculação com dado em dia (1 = 100% = no ritmo); o sentido segue a mesma margem dos avisos.
+ */
+export function placar(contas, cfg = CONFIG_PADRAO) {
   const ativas = contas.filter((c) => c.situacao === 'ativa');
   const emDia = ativas.filter((c) => !c.desatualizado);
   const n = (s) => ativas.filter((c) => c.sentido === s).length;
@@ -175,6 +194,7 @@ export function placar(contas) {
     investimento: emDia.reduce((s, c) => s + c.investimento, 0),
     gasto: emDia.reduce((s, c) => s + c.gasto, 0),
     planejadoAteOntem: emDia.reduce((s, c) => s + c.planejadoAteOntem, 0),
+    ...saude(emDia, cfg),
   };
 }
 
@@ -185,15 +205,18 @@ export function placar(contas) {
 export function agruparPorCliente(contas, cfg = CONFIG_PADRAO) {
   const m = new Map();
   for (const c of contas) {
-    if (!m.has(c.clienteId)) m.set(c.clienteId, { clienteId: c.clienteId, cliente: c.cliente, analista: c.analista, contas: [] });
+    if (!m.has(c.clienteId)) m.set(c.clienteId, { clienteId: c.clienteId, cliente: c.cliente, contas: [] });
     m.get(c.clienteId).contas.push(c);
   }
   return [...m.values()].map((g) => {
     const ativas = g.contas.filter((c) => c.situacao === 'ativa');
     const s = (k) => ativas.reduce((t, c) => t + (c[k] || 0), 0);
     const indice = s('planejadoAteOntem') > 0 ? s('gasto') / s('planejadoAteOntem') : null;
+    const analistas = [...new Set(g.contas.map((c) => c.analista).filter(Boolean))];
     return {
       ...g,
+      analistas,
+      analista: analistas.length === 1 ? analistas[0] : null,
       total: {
         investimento: s('investimento'), planejadoAteOntem: s('planejadoAteOntem'), gasto: s('gasto'), projecaoFim: s('projecaoFim'),
         // com alguma conta de dado parado, o total do cliente não tem sentido confiável

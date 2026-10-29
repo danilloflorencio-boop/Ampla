@@ -94,6 +94,10 @@ export const PLATAFORMAS = {
     nome: 'TikTok Ads', overDiarioMax: null, tetoSemanalMultiplo: null, tetoMensalMultiplo: null, validado: false,
     alavancas: ['Preferir orçamento vitalício com data de término do flight', 'Validar na documentação oficial o comportamento de over-delivery'],
   },
+  'LINKEDIN ADS': {
+    nome: 'LinkedIn Ads', overDiarioMax: null, tetoSemanalMultiplo: null, tetoMensalMultiplo: null, validado: false,
+    alavancas: ['Preferir orçamento vitalício com data de término do flight', 'Validar na documentação oficial o comportamento de over-delivery'],
+  },
   'PINTEREST ADS': {
     nome: 'Pinterest Ads', overDiarioMax: null, tetoSemanalMultiplo: null, tetoMensalMultiplo: null, validado: false,
     alavancas: ['Preferir orçamento vitalício com data de término do flight', 'Validar na documentação oficial o comportamento de over-delivery'],

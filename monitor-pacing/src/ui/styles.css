@@ -217,6 +217,7 @@ table.dados td.nome { white-space: normal; min-width: 240px; max-width: 420px; }
 .placar .p-ok dd { color: var(--q-ok); } .placar .p-acima dd { color: var(--q-acima); } .placar .p-abaixo dd { color: var(--q-abaixo); }
 .placar .p-aviso dd { color: var(--q-acima-forte); }
 .placar .p-velho dd { color: var(--q-tinta-2); }
+.placar .p-saude.p-no-ritmo dd { color: var(--q-ok); } .placar .p-saude.p-acima dd { color: var(--q-acima); } .placar .p-saude.p-abaixo dd { color: var(--q-abaixo); }
 
 .quadro-filtros { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 18px 0 14px; }
 .quadro-filtros .campo { color: var(--q-tinta-2); }

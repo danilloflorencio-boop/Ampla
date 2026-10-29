@@ -23,8 +23,10 @@ limites ficam em `src/config/config.js` (`avisos.margem` e `avisos.diasParaFim`)
 | Analista da conta | Por conta: o estado do pacing e o link do monitor já aberto na conta. Por linha fora da margem: quanto gastou contra o previsto, o valor a configurar na plataforma e o prazo |
 | Liderança direta do analista | Overview das contas do time com linhas fora da margem: estado da conta, projeção e quantas linhas ajustar até amanhã |
 
-Quem não tem nada fora da margem não recebe mensagem. O cadastro de analistas e lideranças,
-e o analista de cada cliente, ficam na tela **Equipe e avisos**, que só a liderança abre (marcada
+Quem não tem nada fora da margem não recebe mensagem. O cadastro de analistas e lideranças
+e o **responsável por conta** ficam na tela **Equipe e avisos**: a liderança escolhe o analista
+padrão de cada cliente e, se quiser, um analista diferente para cada conta (plataforma). O aviso
+de uma conta vai para quem estiver associado a ela. A tela só abre para a liderança (marcada
 como liderança no cadastro ou liderança direta de alguém). Enquanto não houver login, a pessoa se
 identifica em "Você é"; o bloqueio evita mudança por engano, mas não é controle de acesso.
 

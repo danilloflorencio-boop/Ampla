@@ -5,7 +5,7 @@ import { lerPlano } from '../src/core/plano.js';
 import { gerarRealizadoMock } from '../src/core/mock.js';
 import { entidadesDoRealizado } from '../src/core/realizado.js';
 import { sugerirVinculos, aplicarSugestoes } from '../src/core/vinculo.js';
-import { foraDaMargem, sentido, contasDoCliente, montarPainel, filtrarPainel, soPacing, calcularCliente, ajusteDaLinha, tipoDeOrcamento, agruparPorCliente, ehLideranca, podeGerirEquipe } from '../src/core/painel.js';
+import { foraDaMargem, sentido, contasDoCliente, montarPainel, filtrarPainel, soPacing, calcularCliente, ajusteDaLinha, tipoDeOrcamento, agruparPorCliente, ehLideranca, podeGerirEquipe, analistaDaConta } from '../src/core/painel.js';
 import { montarAvisos, linkDaConta } from '../src/core/avisos.js';
 import { configDoCliente } from '../src/config/config.js';
 import { montarDemo, EQUIPE_DEMO, REF_DEMO } from '../src/demo/demoPainel.js';
@@ -61,6 +61,9 @@ test('painel junta todos os clientes, como uma MCC, e filtra por analista, lider
   assert.equal(clientes.size, 4);
   assert.ok(painel.contas.some((c) => c.plataforma === 'GOOGLE ADS'));
   assert.equal(painel.placar.contas, painel.contas.length);
+  const emDia = painel.contas.filter((c) => c.situacao === 'ativa' && !c.desatualizado);
+  assert.equal(painel.placar.saude, emDia.reduce((t, c) => t + c.gasto, 0) / emDia.reduce((t, c) => t + c.planejadoAteOntem, 0), 'saúde geral = usado ÷ previsto até ontem');
+  assert.equal(painel.placar.saudeSentido, sentido(painel.placar.saude));
   const daDuda = filtrarPainel(painel.contas, { analista: 'duda.nunes@exemplo.com' }, EQUIPE_DEMO);
   assert.ok(daDuda.length && daDuda.every((c) => c.analista === 'duda.nunes@exemplo.com'));
   const timeHelena = filtrarPainel(painel.contas, { lideranca: 'helena.prado@exemplo.com' }, EQUIPE_DEMO);
@@ -182,4 +185,24 @@ test('equipe e avisos: só a liderança acessa, salvo antes do primeiro cadastro
   const soLiderDeAlguem = { pessoas: [{ nome: 'L', email: 'l@x', lider: null }, { nome: 'A', email: 'a@x', lider: 'l@x' }] };
   assert.equal(podeGerirEquipe(soLiderDeAlguem, 'l@x'), true, 'quem é liderança direta de alguém conta como liderança');
   assert.equal(podeGerirEquipe(soLiderDeAlguem, 'a@x'), false);
+});
+
+test('liderança associa cada conta a um analista; sem associação vale o do cliente', () => {
+  const [ws] = demo().filter((w) => w.clienteId === 'demo-varejo-norte');
+  ws.analistaPorConta = { 'GOOGLE ADS': 'bruna.lima@exemplo.com' };
+  assert.equal(analistaDaConta(ws, 'GOOGLE ADS'), 'bruna.lima@exemplo.com');
+  assert.equal(analistaDaConta(ws, 'META ADS'), 'caio.rocha@exemplo.com');
+  const contas = contasDoCliente(ws, REF_DEMO);
+  assert.equal(contas.find((c) => c.plataforma === 'GOOGLE ADS').analista, 'bruna.lima@exemplo.com');
+  assert.equal(contas.find((c) => c.plataforma === 'META ADS').analista, 'caio.rocha@exemplo.com');
+  const [g] = agruparPorCliente(contas);
+  assert.deepEqual(g.analistas.sort(), ['bruna.lima@exemplo.com', 'caio.rocha@exemplo.com']);
+  assert.equal(g.analista, null, 'cliente com dois analistas não tem um só responsável');
+  const google = contas.find((c) => c.plataforma === 'GOOGLE ADS');
+  assert.ok(google.fora.length, 'a conta do Google tem linha fora da margem na demo');
+  const { avisos } = montarAvisos(contas, EQUIPE_DEMO, REF_DEMO);
+  const bruna = avisos.find((a) => a.para === 'bruna.lima@exemplo.com');
+  assert.ok(bruna && bruna.contas.includes(google.id), 'o aviso da conta vai para quem foi associado');
+  assert.ok(!avisos.some((a) => a.para === 'caio.rocha@exemplo.com' && a.contas.includes(google.id)));
+  assert.deepEqual(filtrarPainel(contas, { analista: 'bruna.lima@exemplo.com' }).map((c) => c.id), [google.id]);
 });

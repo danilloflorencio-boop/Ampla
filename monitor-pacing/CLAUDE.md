@@ -40,7 +40,8 @@ da tabela = uma veiculação). Somente leitura nas plataformas e sem IA no núcl
 
 ## Glossário
 flight = aba do plano · linha = uma linha da tabela PLANO DE MÍDIA · turma = código EV-xxxxx ·
-conjunto = ad set / ad group · índice de ritmo = gasto até ontem ÷ planejado até ontem ·
+conjunto = ad set / ad group · índice de ritmo = gasto até ontem ÷ planejado até ontem (no painel,
+"saúde geral" = o mesmo índice somado de todas as contas, em %) ·
 diária necessária = saldo ÷ dias restantes · conta = cliente × plataforma no painel ·
 margem = ±10% do índice; janela = 10 dias para o fim da linha.
 

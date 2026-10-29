@@ -110,7 +110,6 @@ export function telaPainel(p, estado, db) {
   const clientes = [...new Map(p.contas.map((c) => [c.clienteId, c.cliente])).entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR')).map(([v, r]) => ({ v, r }));
   const plataformas = [...new Map(p.contas.map((c) => [c.plataforma, c.plataformaNome])).entries()].map(([v, r]) => ({ v, r }));
   const grupos = agruparPorCliente(p.filtradas, p.cfg);
-  const indiceGeral = pl.planejadoAteOntem ? pl.gasto / pl.planejadoAteOntem : null;
   const ticker = [...p.contas].filter((c) => c.situacao === 'ativa' && c.indice !== null && c.sentido)
     .sort((a, b) => Math.abs(b.desvio) - Math.abs(a.desvio))
     .map((c) => `<span class="t-item t-${c.sentido}"><b>${esc(c.cliente)}</b> ${esc(c.plataformaNome)} <i>${decimal(c.indice)}</i> ${SENTIDO[c.sentido].seta} ${desvioTexto(c.desvio)}</span>`).join('');
@@ -128,7 +127,7 @@ export function telaPainel(p, estado, db) {
     </tr>`;
   const linhas = grupos.map((g) => {
     const t = g.total;
-    return `<tr class="q-cliente"><td class="q-nome"><div class="q-nome-linha"><div><span class="q-cliente-nome">${esc(g.cliente)}</span><span class="q-sub">${esc(nomeDe(equipe, g.analista) || 'sem analista')} · ${g.contas.length} conta(s)</span></div>${botao(g.clienteId, '', g.cliente)}</div></td><td></td>
+    return `<tr class="q-cliente"><td class="q-nome"><div class="q-nome-linha"><div><span class="q-cliente-nome">${esc(g.cliente)}</span><span class="q-sub">${esc(g.analistas.map((e) => nomeDe(equipe, e) || e).join(', ') || 'sem analista')} · ${g.contas.length} conta(s)</span></div>${botao(g.clienteId, '', g.cliente)}</div></td><td></td>
       <td class="num">${brl(t.investimento)}</td><td class="num">${brl(t.planejadoAteOntem)}</td><td class="num">${brl(t.gasto)}</td>
       <td class="num q-indice">${t.indice === null ? '—' : decimal(t.indice)}</td><td></td><td>${barraDesvio(t.desvio, margem)}</td><td class="num">${brl(t.projecaoFim)}</td><td></td>
       <td>${t.sentido ? `<span class="q-status q-${t.sentido}"><b aria-hidden="true">${SENTIDO[t.sentido].seta}</b>${SENTIDO[t.sentido].rotulo}</span>` : ''}</td></tr>
@@ -149,7 +148,7 @@ export function telaPainel(p, estado, db) {
       <div class="p-abaixo"><dt>Abaixo</dt><dd>${pl.abaixo}</dd></div>
       <div class="p-aviso"><dt>Avisos no chat</dt><dd>${pl.comAviso}<small>${pl.linhasComAviso} linha(s)</small></dd></div>
       ${pl.desatualizadas ? `<div class="p-velho"><dt>Dados desatualizados</dt><dd>${pl.desatualizadas}<small>conta(s) sem aviso até a carga chegar</small></dd></div>` : ''}
-      <div><dt>Índice geral</dt><dd>${indiceGeral === null ? '—' : decimal(indiceGeral)}<small>${brl(pl.gasto)} de ${brl(pl.planejadoAteOntem)}</small></dd></div>
+      <div class="p-saude ${pl.saudeSentido ? `p-${pl.saudeSentido}` : ''}" title="${esc(`${brl(pl.gasto)} usados de ${brl(pl.planejadoAteOntem)} previstos até ${dataCurta(addDias(p.ref, -1))}`)}"><dt>Saúde geral</dt><dd>${pl.saude === null ? '—' : pct(pl.saude, 0)}</dd><small>do previsto até ${dataCurta(addDias(p.ref, -1))} · 100% = no ritmo</small></div>
     </dl>
     <div class="quadro-filtros">
       ${sel('analista', 'Contas de', pessoas.map((x) => ({ v: x.email, r: x.nome })), f.analista, 'Toda a Ampla')}
@@ -196,11 +195,36 @@ export function telaBloqueada() {
   </section>`;
 }
 
+/**
+ * Responsável por conta: a liderança escolhe o analista padrão de cada cliente e, se quiser,
+ * um analista diferente para cada conta (plataforma). É quem recebe os avisos daquela conta.
+ */
+export function tabelaResponsaveis(contas, db) {
+  const pessoas = [...db.equipe.pessoas].filter((x) => x.email).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const opcoes = (valor, vazio) => `<option value="">${esc(vazio)}</option>${pessoas.map((x) => `<option value="${esc(x.email)}" ${x.email === valor ? 'selected' : ''}>${esc(x.nome || x.email)}</option>`).join('')}`;
+  const porCliente = new Map();
+  for (const c of contas) {
+    if (!porCliente.has(c.clienteId)) porCliente.set(c.clienteId, []);
+    porCliente.get(c.clienteId).push(c);
+  }
+  const linhas = [...porCliente.entries()].sort((a, b) => a[1][0].cliente.localeCompare(b[1][0].cliente, 'pt-BR')).map(([id, lista]) => {
+    const ws = db.clientes[id];
+    const padrao = ws?.analista || '';
+    const nomePadrao = pessoas.find((x) => x.email === padrao)?.nome;
+    return `<tr class="resp-cliente"><td><b>${esc(lista[0].cliente)}</b><span class="vg-sub">analista padrão do cliente</span></td>
+        <td><select data-analista-cliente="${esc(id)}" aria-label="Analista padrão de ${esc(lista[0].cliente)}">${opcoes(padrao, 'Sem analista')}</select></td></tr>
+      ${lista.map((c) => `<tr><td class="recuo-1">${esc(c.plataformaNome)}${c.fora.length ? ' <span class="vg-aviso">aviso hoje</span>' : ''}</td>
+        <td><select data-analista-conta="${esc(id)}|${esc(c.plataforma)}" aria-label="Analista da conta ${esc(c.cliente)} · ${esc(c.plataformaNome)}">${opcoes(ws?.analistaPorConta?.[c.plataforma] || '', `Igual ao cliente${nomePadrao ? ` (${nomePadrao})` : ''}`)}</select></td></tr>`).join('')}`;
+  }).join('');
+  return `<section class="bloco"><h2>Responsável por conta</h2>
+    <p class="sub">Associe cada conta a um analista: é ele quem recebe os avisos dela, e a conta aparece em “Contas de” no painel. Sem associação, vale o analista padrão do cliente.</p>
+    ${linhas ? `<div class="rolagem"><table class="dados tabela-resp"><thead><tr><th>Cliente · conta</th><th>Analista</th></tr></thead><tbody>${linhas}</tbody></table></div>` : '<p class="mudo">Nenhum cliente importado.</p>'}
+  </section>`;
+}
+
 export function telaEquipe(p, db) {
   if (!podeGerirEquipe(db.equipe, db.preferencias.usuario)) return telaBloqueada();
-  const equipe = db.equipe;
-  const clientes = Object.values(db.clientes).sort((a, b) => a.cliente.localeCompare(b.cliente, 'pt-BR'));
-  const pessoas = equipe.pessoas;
+  const pessoas = db.equipe.pessoas;
   const opcoesPessoa = (valor, vazio, lista = pessoas) => `<option value="">${vazio}</option>${lista.filter((x) => x.email).map((x) => `<option value="${esc(x.email)}" ${x.email === valor ? 'selected' : ''}>${esc(x.nome || x.email)}</option>`).join('')}`;
   const link = db.preferencias.linkPainel || '';
   return `<div class="grade grade-2" style="margin-top:0">
@@ -214,14 +238,13 @@ export function telaEquipe(p, db) {
         <input type="url" value="${esc(link)}" placeholder="https://…/monitor-pacing/" data-acao-change="link-painel"></label>
       <p class="dica">Margem e janela ficam em src/config/config.js (avisos.margem e avisos.diasParaFim).</p>
     </section>
-    <section class="bloco"><h2>Responsável por cliente</h2>
-      <p class="sub">Quem recebe os avisos de cada cliente. A liderança direta vem do cadastro da equipe.</p>
-      ${clientes.length ? `<div class="rolagem"><table class="dados"><thead><tr><th>Cliente</th><th>Analista</th></tr></thead><tbody>
-        ${clientes.map((c) => `<tr><td>${esc(c.cliente)}</td><td><select data-analista-cliente="${esc(c.clienteId)}">${opcoesPessoa(c.analista, 'Sem analista')}</select></td></tr>`).join('')}
-      </tbody></table></div>` : '<p class="mudo">Nenhum cliente importado.</p>'}
+    <section class="bloco"><h2>Equipe (${pessoas.length})</h2>
+      <p class="sub">Quem é liderança e quem é liderança direta de quem fica no cadastro abaixo.</p>
+      <ul class="lista-simples">${pessoas.filter((x) => x.email).map((x) => `<li><b>${esc(x.nome || x.email)}</b>${x.lideranca ? ' · liderança' : ''}${x.lider ? ` · responde a ${esc(pessoas.find((y) => y.email === x.lider)?.nome || x.lider)}` : ''}</li>`).join('') || '<li>Ninguém cadastrado ainda.</li>'}</ul>
     </section>
   </div>
-  <section class="bloco" style="margin-top:20px"><div class="cabeca-bloco"><div><h2>Equipe (${pessoas.length})</h2><p class="sub">Analistas e lideranças. Só quem está marcado como liderança (ou é liderança direta de alguém) abre esta área. As mudanças são salvas na hora.</p></div>
+  <div style="margin-top:20px">${tabelaResponsaveis(p.contas, db)}</div>
+  <section class="bloco" style="margin-top:20px"><div class="cabeca-bloco"><div><h2>Cadastro da equipe</h2><p class="sub">Analistas e lideranças. Só quem está marcado como liderança (ou é liderança direta de alguém) abre esta área. As mudanças são salvas na hora.</p></div>
       <button class="btn btn-mini" data-acao="adicionar-pessoa">Adicionar pessoa</button></div>
     ${pessoas.length ? `<div class="rolagem"><table class="dados"><thead><tr><th>Nome</th><th>E-mail (Google Chat)</th><th>Liderança</th><th>Liderança direta</th><th></th></tr></thead><tbody>
       ${pessoas.map((x, i) => `<tr><td><input type="text" value="${esc(x.nome)}" data-pessoa="${i}" data-campo="nome" placeholder="Nome e sobrenome" aria-label="Nome"></td>
@@ -239,7 +262,7 @@ export function telaEquipe(p, db) {
  * Visão geral enxuta de um cliente: só as linhas em veiculação (os mesmos números do painel),
  * quatro números, a régua, um gráfico e a lista de linhas. Abre pelo botão "Visão geral" do painel.
  */
-export function visaoGeral(ctx) {
+export function visaoGeral(ctx, { detalhes = true } = {}) {
   const { ref, ws, filtros, opcoes, cfg } = ctx;
   const ativas = ctx.metricas.filter((m) => m.situacao === 'ativa');
   const t = agregar(ativas, cfg);
@@ -261,7 +284,7 @@ export function visaoGeral(ctx) {
       <td class="num">${brl(m.gasto)}<span class="vg-sub">de ${brl(m.planejadoAteOntem)}</span></td>
       <td class="num forte">${m.indice === null ? '—' : decimal(m.indice)}</td>
       <td>${chip(m.status)}${foraDaMargem(m, cfg) ? '<span class="vg-aviso">Aviso no chat</span>' : ''}</td>
-      <td><button class="btn btn-mini" data-detalhe="${esc(m.linhaId)}">Detalhes</button></td></tr>`).join('');
+      ${detalhes ? `<td><button class="btn btn-mini" data-detalhe="${esc(m.linhaId)}">Detalhes</button></td>` : ''}</tr>`).join('');
   return `<section class="vg">${topo}
     <dl class="vg-cartoes">
       <div><dt>Investimento</dt><dd>${brl(t.investimento)}</dd><small>${ativas.length} linha(s) em veiculação</small></div>
@@ -272,7 +295,7 @@ export function visaoGeral(ctx) {
     <section class="bloco">${regua(t, { grande: true, tolerancia: cfg.avisos.margem })}</section>
     <section class="bloco"><h2>Verba acumulada</h2><p class="sub">Linha tracejada: o previsto. Linha cheia: o usado. Pontilhada: para onde vai no ritmo atual. Faixa verde: ±${pct(cfg.avisos.margem, 0)}.</p><div class="grafico"><canvas id="g-geral-acum"></canvas></div></section>
     <section class="bloco"><h2>Linhas em veiculação</h2>
-      <div class="rolagem"><table class="dados"><thead><tr><th>Linha</th><th>Fim</th><th class="num">Usado / previsto</th><th class="num">Índice</th><th>Status</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>
+      <div class="rolagem"><table class="dados"><thead><tr><th>Linha</th><th>Fim</th><th class="num">Usado / previsto</th><th class="num">Índice</th><th>Status</th>${detalhes ? '<th></th>' : ''}</tr></thead><tbody>${linhas}</tbody></table></div>
     </section>
   </section>`;
 }

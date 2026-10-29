@@ -2,12 +2,12 @@
 // Sem framework: estado em memória → cálculo derivado → HTML → eventos por delegação.
 import { hojeSP, addDias, dataCurta, brl, normalizar } from '../core/format.js';
 import { lerPlano, diffPlanos, rotuloLinha } from '../core/plano.js';
-import { lerCSV, normalizarRealizado, mesclarRealizado, entidadesDoRealizado, ultimaExtracao, paraCSV, chaveEntidade } from '../core/realizado.js';
-import { sugerirVinculos, aplicarSugestoes, alocarRealizado } from '../core/vinculo.js';
-import { calcularTudo, agregar, indexarAlocacoes, series } from '../core/pacing.js';
-import { avaliarRegras, aplicarDecisoes } from '../core/regras.js';
+import { lerCSV, normalizarRealizado, mesclarRealizado, entidadesDoRealizado, paraCSV, chaveEntidade } from '../core/realizado.js';
+import { sugerirVinculos, aplicarSugestoes } from '../core/vinculo.js';
+import { series } from '../core/pacing.js';
+import { contextoCliente } from '../core/cliente.js';
 import { gerarRealizadoMock } from '../core/mock.js';
-import { montarPainel, filtrarPainel, soPacing, podeGerirEquipe, ehLideranca } from '../core/painel.js';
+import { montarPainel, filtrarPainel, podeGerirEquipe, ehLideranca, planoAtivo } from '../core/painel.js';
 import { montarAvisos } from '../core/avisos.js';
 import { configDoCliente } from '../config/config.js';
 import * as armazenamento from './storage.js';
@@ -33,7 +33,6 @@ const estado = {
 
 const $ = (s, el = document) => el.querySelector(s);
 const ws = () => estado.db.clientes[estado.db.clienteAtivo] || null;
-const planoAtivo = (w) => w?.planos.find((p) => p.id === w.planoAtivo) || w?.planos[0] || null;
 const persistir = () => { if (!armazenamento.salvar(estado.db)) toast('Não foi possível salvar no navegador (armazenamento cheio ou bloqueado).'); };
 
 function toast(msg) {
@@ -62,50 +61,8 @@ async function copiar(texto) {
 
 // ------------------------------------------------------------------ cálculo derivado
 function calcular() {
-  const w = ws();
-  const plano = planoAtivo(w);
-  if (!w || !plano) return null;
-  const cfg = configDoCliente(w.config);
-  const ref = estado.ref;
-  const registros = w.realizado;
-  const entidades = entidadesDoRealizado(registros);
-  const nomes = new Map(entidades.map((e) => [e.chave, e]));
-  const sugestoes = sugerirVinculos(entidades, plano.linhas, w.vinculos);
-  const alloc = alocarRealizado(registros, plano.linhas, w.vinculos, ref);
-  const { metricas: metricasTodas } = calcularTudo(plano.linhas, alloc.alocacoes, ref, cfg);
-  const f = estado.filtros;
-  const metricas = metricasTodas.filter((m) => (!f.plataforma || m.linha.plataforma === f.plataforma) && (!f.flight || m.linha.flightId === f.flight)
-    && (!f.produto || m.linha.produto === f.produto) && (!f.praca || m.linha.praca === f.praca) && (!f.situacao || m.situacao === f.situacao));
-  const total = agregar(metricas, cfg);
-  const ext = ultimaExtracao(registros);
-  const brutos = avaliarRegras({
-    metricas: metricasTodas, flights: plano.flights, registros, orfaos: alloc.orfaos, foraDoPeriodo: alloc.foraDoPeriodo,
-    vinculos: w.vinculos, sugestoes, nomes, justificativas: w.justificativas, ref, ultimaExtracao: ext, cfg,
-    alocacoesPorLinha: indexarAlocacoes(alloc.alocacoes),
-  });
-  const alertas = aplicarDecisoes(soPacing(brutos, cfg), w.decisoes, ref);
-  const ids = new Set(metricas.map((m) => m.linhaId));
-  const filtrando = Object.values(f).some(Boolean);
-  const alertasFiltrados = !filtrando ? alertas : alertas.filter((a) => {
-    const e = a.entidade;
-    if (e.tipo === 'linha') return ids.has(e.id);
-    if (e.tipo === 'par') return e.id.split('>').some((x) => ids.has(x));
-    if (e.tipo === 'conjunto') { const v = w.vinculos[e.id]; return !v || v.linhas.some((x) => ids.has(x)); }
-    if (e.tipo === 'flight') return !f.flight || f.flight === e.id;
-    return true;
-  });
-  const uniq = (arr) => [...new Set(arr)].sort();
-  const opcoes = {
-    plataformas: uniq(plano.linhas.map((l) => l.plataforma)).map((v) => ({ v, r: v })),
-    flights: plano.flights.map((fl) => ({ v: fl.id, r: fl.aba })),
-    produtos: uniq(plano.linhas.map((l) => l.produto)).map((v) => ({ v, r: v })),
-    pracas: uniq(plano.linhas.map((l) => l.praca)).map((v) => ({ v, r: v })),
-  };
-  const pendenciasVinculo = entidades.filter((e) => !w.vinculos[e.chave]).length;
-  return {
-    db: estado.db, ws: w, plano, cfg, ref, filtros: f, opcoes, estado, entidades, nomes, sugestoes, alloc,
-    metricasTodas, metricas, total, alertas, alertasFiltrados, ultimaExtracao: ext, pendenciasVinculo,
-  };
+  const c = contextoCliente(ws(), estado.ref, estado.filtros);
+  return c && { ...c, db: estado.db, estado };
 }
 
 /** Painel com todas as contas de todos os clientes deste navegador, e os avisos do dia. */
@@ -403,14 +360,30 @@ document.addEventListener('click', (ev) => {
 /** Troca (ou apaga, com null) um e-mail da equipe em todas as referências: liderança e clientes. */
 function trocarEmail(antigo, novo) {
   for (const p of estado.db.equipe.pessoas) if (p.lider === antigo) p.lider = novo;
-  for (const w of Object.values(estado.db.clientes)) if (w.analista === antigo) w.analista = novo;
+  for (const w of Object.values(estado.db.clientes)) {
+    if (w.analista === antigo) w.analista = novo;
+    for (const [plat, email] of Object.entries(w.analistaPorConta || {})) {
+      if (email !== antigo) continue;
+      if (novo) w.analistaPorConta[plat] = novo; else delete w.analistaPorConta[plat];
+    }
+  }
   for (const k of ['analista', 'lideranca']) if (estado.filtroPainel[k] === antigo) estado.filtroPainel[k] = novo || '';
 }
 
 document.addEventListener('change', (ev) => {
   const el = ev.target;
   if (el.dataset.filtroPainel !== undefined) { estado.filtroPainel[el.dataset.filtroPainel] = el.value; salvarFiltroPainel(); return render(); }
-  if ((el.dataset.analistaCliente !== undefined || el.dataset.pessoa !== undefined || el.dataset.acaoChange === 'link-painel') && !podeGerir()) { toast('Área da liderança.'); return render(); }
+  if ((el.dataset.analistaCliente !== undefined || el.dataset.analistaConta !== undefined || el.dataset.pessoa !== undefined || el.dataset.acaoChange === 'link-painel') && !podeGerir()) { toast('Área da liderança.'); return render(); }
+  if (el.dataset.analistaConta !== undefined) {
+    const [clienteId, plataforma] = el.dataset.analistaConta.split('|');
+    const w = estado.db.clientes[clienteId];
+    if (w) {
+      w.analistaPorConta = { ...(w.analistaPorConta || {}) };
+      if (el.value) w.analistaPorConta[plataforma] = el.value; else delete w.analistaPorConta[plataforma];
+      persistir(); render();
+    }
+    return;
+  }
   if (el.dataset.analistaCliente !== undefined) {
     const w = estado.db.clientes[el.dataset.analistaCliente];
     if (w) { w.analista = el.value || null; persistir(); render(); }
