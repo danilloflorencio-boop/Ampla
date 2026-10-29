@@ -100,6 +100,37 @@ export const TEXTOS = {
     mensagem: 'Soma das diárias configuradas nos conjuntos da linha: {configurado}. Diária necessária para fechar o plano: {necessaria} ({variacao}).',
     acao: 'Ajustar a diária configurada para {necessaria} até {fim}{detalhe}.',
   },
+
+  // Avisos enviados pelo Google Chat (src/core/avisos.js). Mesmo princípio: entidade, número,
+  // ação e prazo. Ícones: 🔺 acima do ritmo, 🔻 abaixo; 🟡 até 20% de desvio, 🔴 acima disso.
+  // {link} já vem com o espaço e os parênteses: " (https://…)", ou vazio se não houver link.
+  AVISO_ANALISTA: {
+    abertura: 'Olá {nome}',
+    conta: '📊 O pacing da conta {conta} {estado} (dados até {ontem}). Consulte o Monitor de pacing{link} para ver o andamento da conta. Se confirmado, ajuste na plataforma para garantir a normalidade até o fim de cada linha:',
+    rodape: 'Este aviso só sai quando uma linha fica fora da margem de ±{margem} e faltam {janela} dias ou menos para ela acabar. Antes disso, a oscilação é natural e o ritmo ainda tem tempo de se acertar.',
+  },
+  AVISO_LIDERANCA: {
+    abertura: 'Olá {nome}',
+    resumo: '📊 Overview de pacing do seu time em {data} (dados até {ontem}): {n} conta(s) com linhas fora da margem de ±{margem} a {janela} dias ou menos do fim. Consulte o Monitor de pacing{link} para ver o andamento.',
+    conta: '{icone} {conta} · analista {analista}\n   O pacing da conta {estado} · projeção {projecao} de {investimento} até {fim}',
+    acao: '   Ação: alinhar com {analista} o ajuste de diária na plataforma de {nFora} linha(s) até amanhã ({amanha}).',
+  },
+  // Estado da conta no cabeçalho da mensagem.
+  AVISO_ESTADO: {
+    muitoAcima: 'está muito acima do previsto ({desvio})',
+    acima: 'está acima do previsto ({desvio})',
+    muitoAbaixo: 'está muito abaixo do previsto ({desvio})',
+    abaixo: 'está abaixo do previsto ({desvio})',
+    misto: 'está no ritmo no total ({desvio}), mas tem {n} linha(s) fora da margem de ±{margem}',
+  },
+  AVISO_LINHA: {
+    item: '{icone} {entidade} · até {fim} ({prazo})\n   Gastou {gasto} de {planejado} previstos até ontem (índice {indice}, {desvio}).',
+    diario: '   Ação: ajustar o orçamento diário de {atual} para {novo} ({variacao} por dia) a partir de hoje, até {fim}, para fechar a linha em {investimento}.',
+    indefinido: '   Ação: ajustar o orçamento diário de {atual} para {novo} ({variacao} por dia) a partir de hoje, até {fim}, para fechar a linha em {investimento}. Se o conjunto usar orçamento total, ajuste o total para {total}.',
+    total: '   Ação: ajustar hoje o orçamento total {conjuntos} para {total}, para fechar a linha em {investimento} até {fim} (equivale a {novo} por dia).',
+    parado: '   Ação: conferir hoje a entrega no gerenciador; o conjunto está sem gasto. Configurar {novo} por dia até {fim} para fechar a linha em {investimento}.',
+    esgotada: '   Ação: pausar hoje. O investimento de {investimento} já foi consumido ({gasto}); o excedente de {excedente} precisa de justificativa.',
+  },
 };
 
 /** Preenche um template: t('R01', 'acao', { media: 'R$ 10,00' }). */

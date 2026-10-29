@@ -13,6 +13,7 @@ da tabela = uma veiculação). Somente leitura nas plataformas e sem IA no núcl
 - `npm run build`: `dist/monitor-pacing.html`, arquivo único.
 - `node tools/gerar_demo.mjs`: regenera `src/demo/planoDemo.js` se o parser ou a fixture mudarem.
 - `python3 tools/gerar_fixture_sebrae.py`: regenera a fixture .xlsx.
+- `node tools/avisos.mjs workspace.json [--ref AAAA-MM-DD]`: avisos do dia em JSON, para o Operações Bot.
 
 ## Convenções que não podem quebrar
 - **Dinheiro em centavos inteiros** em todo o núcleo. Formatar só na UI (`brl()`).
@@ -27,12 +28,17 @@ da tabela = uma veiculação). Somente leitura nas plataformas e sem IA no núcl
 - O mesmo conjunto atravessa flights. O gasto é alocado **por dia** à linha ativa (`vinculo.js`).
 - Sem bibliotecas novas no app sem perguntar. Hoje são só Chart.js 4.4.1 e SheetJS 0.18.5 via cdnjs.
 - Textos de interface em pt-BR, frase em caixa normal, verbos de ação nos botões.
+- **Só pacing.** Nada de KPI (custo unitário, resultado, leads) nas telas nem nos avisos.
+- **O app é consultivo.** Quem avisa é o chat, e só fora da margem perto do fim (`docs/AVISOS.md`).
+  Dado desatualizado nunca vira aviso.
 
 ## Glossário
 flight = aba do plano · linha = uma linha da tabela PLANO DE MÍDIA · turma = código EV-xxxxx ·
 conjunto = ad set / ad group · índice de ritmo = gasto até ontem ÷ planejado até ontem ·
-diária necessária = saldo ÷ dias restantes.
+diária necessária = saldo ÷ dias restantes · conta = cliente × plataforma no painel ·
+margem = ±10% do índice; janela = 10 dias para o fim da linha.
 
 ## Decisões pendentes (perguntar antes de decidir)
 Conector do BI · backend/armazenamento compartilhado · aprovação da nomenclatura · escopo do
-remanejamento (R12) · validação dos limites de entrega das plataformas · meta do Acréscimo · IA opcional.
+remanejamento (R12) · validação dos limites de entrega das plataformas · meta do Acréscimo · IA opcional ·
+entrega dos avisos pelo Operações Bot · origem do cadastro de equipe e lideranças.

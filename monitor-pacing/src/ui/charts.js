@@ -1,5 +1,5 @@
 // Gráficos com Chart.js (global `Chart`, carregado via <script> UMD).
-import { brl, dataCurta, inteiro } from '../core/format.js';
+import { brl, dataCurta } from '../core/format.js';
 
 const instancias = new Map();
 const cor = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -40,7 +40,7 @@ function base(s, eixoY) {
       tooltip: {
         callbacks: {
           title: (it) => dataCurta(s.datas[it[0].dataIndex]),
-          label: (it) => (it.dataset.label.startsWith('_') ? null : `${it.dataset.label}: ${it.dataset.formato === 'n' ? inteiro(it.raw) : brl(it.raw)}`),
+          label: (it) => (it.dataset.label.startsWith('_') ? null : `${it.dataset.label}: ${brl(it.raw)}`),
         },
       },
       hojeMarcador: { indice: iRef },
@@ -100,23 +100,6 @@ export function graficoDiario(canvas, s) {
       ],
     },
     options: base(s, reaisCurtos),
-    plugins: [pluginHoje],
-  });
-}
-
-export function graficoResultado(canvas, s, rotulo = 'resultados') {
-  if (!s) return;
-  const o = base(s, (v) => inteiro(v));
-  criar(canvas, {
-    type: 'line',
-    data: {
-      labels: s.datas,
-      datasets: [
-        { label: `Planejado (${rotulo})`, data: s.resultadoPlanAcum, borderColor: cor('--tinta-3'), borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, formato: 'n' },
-        { label: `Realizado (${rotulo})`, data: s.resultadoAcum, borderColor: cor('--ok'), borderWidth: 2.5, pointRadius: 0, formato: 'n' },
-      ],
-    },
-    options: o,
     plugins: [pluginHoje],
   });
 }

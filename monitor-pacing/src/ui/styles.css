@@ -182,6 +182,112 @@ table.dados td.nome { white-space: normal; min-width: 240px; max-width: 420px; }
 .forte { font-weight: 650; }
 .dica { font-size: 12.5px; color: var(--tinta-2); }
 
+/* ---------- navegação: painel geral × cliente ---------- */
+.abas { align-items: center; }
+.abas-sep { flex: none; width: 1px; height: 22px; background: var(--linha-forte); margin: 0 10px; }
+.abas-cliente { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tinta-2); margin-right: 4px; white-space: nowrap; }
+.abas-cliente select { padding: 4px 6px; border: 1px solid var(--linha-forte); border-radius: var(--raio-1); background: var(--superficie); font-size: 13px; max-width: 200px; }
+
+/* ---------- painel (quadro de contas) ----------
+   Conceito de quadro de partidas / pregão: fundo escuro próprio, colunas fixas, rótulos em
+   caixa alta espaçada, números tabulares e uma faixa que corre com os maiores desvios.
+   Fica escuro nos dois temas, como um quadro físico. */
+.quadro {
+  --q-fundo: #0f1c2e; --q-fundo-2: #152640; --q-linha: rgba(160, 190, 230, 0.12); --q-tinta: #e8eef6; --q-tinta-2: #9fb2c8;
+  --q-rotulo: #e9c46a; --q-ok: #6fd39d; --q-acima: #ffaa5e; --q-acima-forte: #ff7a6b; --q-abaixo: #8db8ff; --q-faixa: rgba(111, 211, 157, 0.16);
+  background: linear-gradient(180deg, var(--q-fundo-2), var(--q-fundo) 220px); color: var(--q-tinta);
+  border-radius: 14px; padding: 22px 22px 16px; box-shadow: 0 10px 40px rgba(8, 16, 28, 0.25); border: 1px solid #1d3352;
+}
+.quadro-cabeca { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.quadro-cabeca h2 { margin: 0; font-size: 22px; font-stretch: 115%; letter-spacing: -0.01em; }
+.quadro-cabeca p { margin: 4px 0 0; color: var(--q-tinta-2); font-size: 13px; max-width: 80ch; }
+.quadro-relogio { text-align: right; }
+.quadro-relogio span { display: block; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--q-rotulo); }
+.quadro-relogio b { font-size: 22px; font-stretch: 90%; letter-spacing: 0.04em; }
+
+.ticker { margin: 18px -22px 0; border-block: 1px solid var(--q-linha); background: rgba(0, 0, 0, 0.18); overflow: hidden; }
+.ticker-trilho { display: inline-flex; white-space: nowrap; padding: 8px 0; }
+.ticker-copia { display: inline-flex; }
+.t-item { display: inline-flex; gap: 6px; align-items: baseline; padding: 0 22px; font-size: 13px; color: var(--q-tinta-2); border-right: 1px solid var(--q-linha); }
+.t-item b { color: var(--q-tinta); font-weight: 600; }
+.t-item i { font-style: normal; color: var(--q-tinta); font-weight: 600; }
+.t-acima { color: var(--q-acima); } .t-abaixo { color: var(--q-abaixo); } .t-no-ritmo { color: var(--q-ok); }
+@media (prefers-reduced-motion: no-preference) {
+  .ticker-trilho { animation: correr 60s linear infinite; }
+  .ticker:hover .ticker-trilho { animation-play-state: paused; }
+  @keyframes correr { to { transform: translateX(-50%); } }
+}
+@media (prefers-reduced-motion: reduce) { .ticker { overflow-x: auto; } .ticker-copia { display: none; } }
+
+.placar { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1px; margin: 18px 0 0; background: var(--q-linha); border: 1px solid var(--q-linha); border-radius: 10px; overflow: hidden; }
+.placar div { background: var(--q-fundo); padding: 12px 14px; min-width: 0; }
+.placar dt { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--q-rotulo); }
+.placar dd { margin: 4px 0 0; font-size: 26px; font-weight: 650; font-stretch: 90%; line-height: 1.1; }
+.placar dd small { display: block; font-size: 12px; font-weight: 400; color: var(--q-tinta-2); font-stretch: 100%; margin-top: 2px; }
+.placar .p-ok dd { color: var(--q-ok); } .placar .p-acima dd { color: var(--q-acima); } .placar .p-abaixo dd { color: var(--q-abaixo); }
+.placar .p-aviso dd { color: var(--q-acima-forte); }
+.placar .p-velho dd { color: var(--q-tinta-2); }
+
+.quadro-filtros { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 18px 0 14px; }
+.quadro-filtros .campo { color: var(--q-tinta-2); }
+.quadro-filtros select { background: #0b1626; color: var(--q-tinta); border-color: #2a4466; }
+.quadro .btn { background: transparent; color: var(--q-tinta); border-color: #2a4466; }
+.quadro .btn:hover { border-color: var(--q-tinta-2); }
+
+.quadro .rolagem { background: transparent; border-color: var(--q-linha); }
+table.quadro-tabela { width: 100%; border-collapse: collapse; font-size: 14px; font-stretch: 90%; }
+.quadro-tabela th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--q-rotulo); padding: 10px 10px; border-bottom: 1px solid #2a4466; background: #0b1626; position: sticky; top: 0; white-space: nowrap; }
+.quadro-tabela td { padding: 10px 10px; border-bottom: 1px solid var(--q-linha); white-space: nowrap; vertical-align: middle; }
+.quadro-tabela .num { text-align: right; }
+.quadro-tabela tr.q-cliente td { background: rgba(255, 255, 255, 0.035); padding-top: 14px; font-weight: 600; border-bottom-color: #2a4466; }
+.quadro-tabela tr.q-conta { cursor: pointer; }
+.quadro-tabela tr.q-conta:hover td, .quadro-tabela tr.q-conta:focus-visible td { background: rgba(141, 184, 255, 0.07); }
+.quadro-tabela tr.q-conta td.q-nome { padding-left: 26px; }
+.quadro-tabela tr.q-com-aviso td:first-child { box-shadow: inset 3px 0 0 var(--q-acima-forte); }
+.q-nome { min-width: 220px; white-space: normal !important; }
+.q-link { border: 0; background: none; padding: 0; color: var(--q-tinta); font: inherit; font-size: 15px; font-weight: 650; cursor: pointer; text-align: left; }
+.q-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.q-plat { font-weight: 600; }
+.q-sub { display: block; font-size: 12px; color: var(--q-tinta-2); font-weight: 400; }
+.q-analista { color: var(--q-tinta-2); }
+.q-indice { font-weight: 700; font-size: 15px; }
+.q-osc { color: var(--q-tinta-2); font-size: 13px; }
+.q-osc.sobe { color: var(--q-acima); } .q-osc.desce { color: var(--q-abaixo); }
+.q-mudo { color: var(--q-tinta-2); }
+
+.q-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; }
+.q-status b { font-size: 10px; }
+.q-acima { color: var(--q-acima); background: rgba(255, 170, 94, 0.13); }
+.q-abaixo { color: var(--q-abaixo); background: rgba(141, 184, 255, 0.13); }
+.q-no-ritmo { color: var(--q-ok); background: rgba(111, 211, 157, 0.12); }
+.q-neutro { color: var(--q-tinta-2); background: rgba(255, 255, 255, 0.06); }
+.q-aviso { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 12px; color: var(--q-acima-forte); }
+.q-aviso::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px rgba(255, 122, 107, 0.18); }
+@media (prefers-reduced-motion: no-preference) { .q-aviso::before { animation: piscar 2.4s ease-in-out infinite; } @keyframes piscar { 50% { box-shadow: 0 0 0 6px rgba(255, 122, 107, 0); } } }
+
+/* barra de desvio: centro = plano; esquerda fria (abaixo), direita quente (acima); faixa = margem */
+.desvio { --w: 0%; --m: 10%; position: relative; display: block; width: 150px; height: 12px; }
+.desvio-faixa { position: absolute; top: 0; bottom: 0; left: calc(50% - var(--m)); width: calc(var(--m) * 2); background: var(--q-faixa); border-radius: 3px; }
+.desvio-barra { position: absolute; top: 3px; bottom: 3px; width: var(--w); border-radius: 3px; }
+.desvio.acima .desvio-barra { left: 50%; background: var(--q-acima); }
+.desvio.abaixo .desvio-barra { right: 50%; background: var(--q-abaixo); }
+.desvio-centro { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--q-tinta); border-radius: 1px; }
+.quadro-vazio { color: var(--q-tinta-2); padding: 24px 0; }
+.quadro-nota { margin: 12px 0 0; font-size: 12.5px; color: var(--q-tinta-2); }
+
+/* ---------- equipe e avisos ---------- */
+.lista-simples { margin: 0 0 14px; padding-left: 18px; color: var(--tinta-2); font-size: 14px; }
+.lista-simples li { margin-bottom: 4px; }
+.campo-largo input { width: 100%; }
+table.dados input, table.dados select { width: 100%; min-width: 160px; padding: 5px 7px; border: 1px solid var(--linha-forte); border-radius: var(--raio-1); background: var(--superficie); font-size: 14px; }
+.chat-lista { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
+.chat { display: flex; gap: 12px; align-items: flex-start; }
+.chat-avatar { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--under-fundo); color: var(--marca); }
+.chat-corpo { min-width: 0; flex: 1; }
+.chat-meta { font-size: 13px; margin-bottom: 4px; }
+.chat-app { font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--neutro-fundo); color: var(--tinta-2); }
+.chat-balao { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--superficie-2); border: 1px solid var(--linha); border-radius: 4px 16px 16px 16px; padding: 12px 14px; font-size: 14px; line-height: 1.5; max-width: 90ch; margin-bottom: 6px; }
+
 /* ---------- alertas ---------- */
 .lista-alertas { display: flex; flex-direction: column; gap: 12px; }
 .alerta { background: var(--superficie); border: 1px solid var(--linha); border-left: 4px solid var(--neutro); border-radius: var(--raio-1) var(--raio-2) var(--raio-2) var(--raio-1); padding: 16px 18px; }
@@ -243,8 +349,14 @@ dialog .botoes { display: flex; gap: 10px; justify-content: flex-end; margin-top
   main { padding: 14px; }
   .abertura { padding: 20px 18px; }
   .marca-app { width: 100%; }
+  .quadro { padding: 16px 14px 12px; border-radius: 10px; }
+  .ticker { margin-inline: -14px; }
+  .quadro-relogio { text-align: left; }
+  .quadro-filtros .campo { flex: 1 1 140px; }
+  .quadro-filtros select { width: 100%; }
+  .abas-sep { display: none; }
 }
 @media print {
-  .topo, .painel-fundo, .botoes, .acoes-topo { display: none !important; }
+  .topo, .painel-fundo, .botoes, .acoes-topo, .ticker, .quadro-filtros { display: none !important; }
   body { background: #fff; }
 }

@@ -7,18 +7,24 @@ import { sugerirVinculos, aplicarSugestoes, alocarRealizado } from '../core/vinc
 import { calcularTudo, agregar, indexarAlocacoes, series, chavesDeTurma } from '../core/pacing.js';
 import { avaliarRegras, aplicarDecisoes } from '../core/regras.js';
 import { gerarRealizadoMock } from '../core/mock.js';
+import { montarPainel, filtrarPainel, soPacing } from '../core/painel.js';
+import { montarAvisos } from '../core/avisos.js';
 import { configDoCliente } from '../config/config.js';
 import * as armazenamento from './storage.js';
 import * as V from './views.js';
-import { graficoAcumulado, graficoDiario, graficoResultado, destruirGraficos } from './charts.js';
-import planoDemo from '../demo/planoDemo.js';
+import { graficoAcumulado, graficoDiario, destruirGraficos } from './charts.js';
+import { montarDemo, EQUIPE_DEMO, REF_DEMO } from '../demo/demoPainel.js';
 
-const REF_DEMO = '2026-10-19';
+const ABAS_GERAIS = ['painel', 'equipe'];
+const FILTRO_PAINEL_VAZIO = { analista: '', lideranca: '', cliente: '', plataforma: '', situacao: '' };
 
+const db0 = armazenamento.carregar();
 const estado = {
-  db: armazenamento.carregar(),
+  db: db0,
   ref: hojeSP(),
-  aba: 'geral',
+  aba: 'painel',
+  // "Contas de" fica guardado: cada analista abre o painel já na própria carteira.
+  filtroPainel: { ...FILTRO_PAINEL_VAZIO, ...(db0.preferencias.filtroPainel || {}) },
   filtros: { plataforma: '', flight: '', produto: '', praca: '', situacao: '' },
   filtroAlertas: { estado: 'aberto', severidade: '', regra: '' },
   agrupamento: 'plataforma',
@@ -81,7 +87,7 @@ function calcular() {
     vinculos: w.vinculos, sugestoes, nomes, justificativas: w.justificativas, ref, ultimaExtracao: ext, cfg,
     alocacoesPorLinha: indexarAlocacoes(alloc.alocacoes),
   });
-  const alertas = aplicarDecisoes(brutos, w.decisoes, ref);
+  const alertas = aplicarDecisoes(soPacing(brutos, cfg), w.decisoes, ref);
   const ids = new Set(metricas.map((m) => m.linhaId));
   const filtrando = Object.values(f).some(Boolean);
   const alertasFiltrados = !filtrando ? alertas : alertas.filter((a) => {
@@ -107,21 +113,53 @@ function calcular() {
   };
 }
 
+/** Painel com todas as contas de todos os clientes deste navegador, e os avisos do dia. */
+function calcularPainel() {
+  const cfg = configDoCliente({ avisos: { linkPainel: estado.db.preferencias.linkPainel || '' } });
+  const painel = montarPainel(Object.values(estado.db.clientes), estado.ref);
+  return {
+    ...painel, cfg,
+    filtradas: filtrarPainel(painel.contas, estado.filtroPainel, estado.db.equipe),
+    avisos: montarAvisos(painel.contas, estado.db.equipe, estado.ref, cfg),
+  };
+}
+
 // ------------------------------------------------------------------ render
 let ctxAtual = null;
+let painelAtual = null;
 function render() {
   const app = $('#app');
   destruirGraficos();
+  if (!estado.db.clientes[estado.db.clienteAtivo]) estado.db.clienteAtivo = Object.keys(estado.db.clientes)[0] || null;
   ctxAtual = calcular();
   if (!ctxAtual) {
     app.innerHTML = `<header class="topo"><div class="topo-linha"><div class="marca-app"><h1>Monitor de pacing</h1><span>Ampla · mídia</span></div></div></header><main>${V.telaVazia()}</main>`;
     return;
   }
+  painelAtual = calcularPainel();
   const c = ctxAtual;
-  const telas = { geral: V.visaoGeral, ritmo: V.tabelaRitmo, turmas: V.telaTurmas, alertas: V.telaAlertas, vinculos: V.telaVinculos, plano: V.telaPlano };
-  app.innerHTML = `${V.topo(c)}<main id="principal">${(telas[estado.aba] || V.visaoGeral)(c)}</main><div id="painel">${estado.detalhe ? V.painelLinha(c, estado.detalhe) : ''}</div>`;
+  const telas = {
+    painel: () => V.telaPainel(painelAtual, estado, estado.db), equipe: () => V.telaEquipe(painelAtual, estado.db),
+    geral: V.visaoGeral, ritmo: V.tabelaRitmo, turmas: V.telaTurmas, alertas: V.telaAlertas, vinculos: V.telaVinculos, plano: V.telaPlano,
+  };
+  app.innerHTML = `${V.topo(c, painelAtual)}<main id="principal" class="${ABAS_GERAIS.includes(estado.aba) ? 'principal-geral' : ''}">${(telas[estado.aba] || V.visaoGeral)(c)}</main><div id="painel">${estado.detalhe ? V.painelLinha(c, estado.detalhe) : ''}</div>`;
   requestAnimationFrame(desenharGraficos);
 }
+
+/** Abre um cliente (e, se vier, uma plataforma) a partir do painel ou do link do aviso. */
+function abrirCliente(clienteId, plataforma = '') {
+  if (!estado.db.clientes[clienteId]) { toast('Essa conta não está carregada neste navegador.'); return false; }
+  estado.db.clienteAtivo = clienteId;
+  estado.filtros = { plataforma, flight: '', produto: '', praca: '', situacao: '' };
+  estado.aba = 'geral';
+  estado.detalhe = null;
+  persistir();
+  render();
+  window.scrollTo({ top: 0 });
+  return true;
+}
+
+const salvarFiltroPainel = () => { estado.db.preferencias.filtroPainel = { analista: estado.filtroPainel.analista, lideranca: estado.filtroPainel.lideranca }; persistir(); };
 
 function desenharGraficos() {
   const c = ctxAtual;
@@ -130,8 +168,6 @@ function desenharGraficos() {
     const s = series(c.metricas, c.ref, c.cfg);
     graficoAcumulado($('#g-geral-acum'), s);
     graficoDiario($('#g-geral-dia'), s);
-    const rot = c.metricas.find((m) => m.situacao !== 'agendada')?.rotuloResultado;
-    graficoResultado($('#g-geral-res'), s, rot);
   }
   if (estado.detalhe) {
     const m = c.metricasTodas.find((x) => x.linhaId === estado.detalhe);
@@ -229,19 +265,23 @@ function confirmarRealizado() {
 }
 
 function abrirDemo() {
-  const plano = structuredClone(planoDemo);
-  plano.importadoEm = new Date().toISOString();
-  const w = armazenamento.novoWorkspace(plano);
   estado.ref = REF_DEMO;
-  w.realizado = gerarRealizadoMock(plano, REF_DEMO);
-  const sug = sugerirVinculos(entidadesDoRealizado(w.realizado), plano.linhas, {});
-  w.vinculos = aplicarSugestoes({}, sug, 'alta').vinculos;
-  estado.db.clientes[plano.clienteId] = w;
-  estado.db.clienteAtivo = plano.clienteId;
+  for (const { plano, realizado, analista } of montarDemo(REF_DEMO)) {
+    plano.importadoEm = new Date().toISOString();
+    const w = armazenamento.novoWorkspace(plano);
+    w.realizado = realizado;
+    w.analista = analista;
+    const sug = sugerirVinculos(entidadesDoRealizado(w.realizado), plano.linhas, {});
+    w.vinculos = aplicarSugestoes({}, sug, 'alta').vinculos;
+    estado.db.clientes[plano.clienteId] = w;
+    estado.db.clienteAtivo = estado.db.clienteAtivo || plano.clienteId;
+  }
+  const emails = new Set(estado.db.equipe.pessoas.map((x) => x.email));
+  estado.db.equipe.pessoas.push(...EQUIPE_DEMO.pessoas.filter((x) => !emails.has(x.email)).map((x) => ({ ...x })));
   persistir();
-  estado.aba = 'geral';
+  estado.aba = 'painel';
   render();
-  toast(`Demonstração aberta com data de referência ${dataCurta(REF_DEMO)}/2026. Duas sugestões de vínculo ficaram para você revisar em Vínculos.`);
+  toast(`Demonstração aberta com 4 clientes e data de referência ${dataCurta(REF_DEMO)}/2026. Os clientes “Demo” e a equipe são fictícios.`);
 }
 
 function gerarMock() {
@@ -257,12 +297,12 @@ function gerarMock() {
 
 function exportarPacing() {
   const c = ctxAtual; if (!c) return;
-  const cab = ['flight', 'plataforma', 'produto', 'praca', 'codigo', 'inicio', 'fim', 'situacao', 'status', 'investimento_plataforma', 'usado', 'saldo', 'planejado_ate_ontem', 'indice', 'media_7d', 'diaria_necessaria', 'projecao_fim', 'kpi', 'resultado', 'resultado_plano', 'resultado_projetado', 'custo_real', 'custo_plano', 'leads', 'justificativa'];
+  const cab = ['flight', 'plataforma', 'produto', 'praca', 'codigo', 'inicio', 'fim', 'situacao', 'status', 'investimento_plataforma', 'usado', 'saldo', 'planejado_ate_ontem', 'indice', 'media_7d', 'diaria_necessaria', 'projecao_fim', 'justificativa'];
   const r = (v) => (v === null || v === undefined ? '' : typeof v === 'number' ? String(v) : `"${String(v).replace(/"/g, '""')}"`);
   const c2 = (v) => (v === null || v === undefined ? '' : (v / 100).toFixed(2));
   const linhas = c.metricas.map((m) => [m.linha.aba, m.linha.plataforma, m.linha.produto, m.linha.praca, m.linha.codigoRaw.replace(/\s+/g, ' '), m.linha.inicio, m.linha.fim, m.situacao, m.status.rotulo,
     c2(m.investimento), c2(m.gasto), c2(m.saldo), c2(m.planejadoAteOntem), m.indice === null ? '' : m.indice.toFixed(3), c2(m.media), c2(m.diariaNecessaria), c2(m.projecaoFim),
-    m.kpi, Math.round(m.resultado), m.resultadosPlan, Math.round(m.resultadoProjetado), c2(m.custoUnitReal), c2(m.custoUnitPlan), Math.round(m.leads), c.ws.justificativas[m.linhaId] || ''].map(r).join(','));
+    c.ws.justificativas[m.linhaId] || ''].map(r).join(','));
   baixar(`pacing_${c.ws.clienteId}_${c.ref}.csv`, [cab.join(','), ...linhas].join('\n'), 'text/csv');
 }
 
@@ -297,6 +337,13 @@ function acao(nome, el) {
     case 'exportar-realizado': return baixar(`realizado_${w.clienteId}.csv`, paraCSV(w.realizado), 'text/csv');
     case 'limpar-realizado': if (confirm('Apagar todo o realizado deste cliente? Vínculos e decisões ficam.')) { w.realizado = []; persistir(); render(); } return;
     case 'exportar-workspace': return baixar(`workspace_${w.clienteId}_${estado.ref}.json`, armazenamento.exportarJSON(estado.db, w.clienteId), 'application/json');
+    case 'limpar-filtros-painel': estado.filtroPainel = { ...FILTRO_PAINEL_VAZIO }; salvarFiltroPainel(); return render();
+    case 'adicionar-pessoa': estado.db.equipe.pessoas.push({ nome: '', email: '', lider: null }); persistir(); return render();
+    case 'exportar-avisos': {
+      const { avisos } = painelAtual.avisos;
+      return baixar(`avisos_pacing_${estado.ref}.json`, JSON.stringify({ ref: estado.ref, geradoEm: new Date().toISOString(), avisos: avisos.map(({ para, nome, papel, texto }) => ({ para, nome, papel, texto })) }, null, 2), 'application/json');
+    }
+    case 'exportar-tudo': return baixar(`workspace_ampla_${estado.ref}.json`, armazenamento.exportarJSON(estado.db), 'application/json');
     case 'remover-cliente':
       if (confirm(`Remover ${w.cliente} deste navegador? Exporte o workspace antes se quiser guardar.`)) {
         delete estado.db.clientes[w.clienteId];
@@ -332,10 +379,18 @@ document.addEventListener('click', (ev) => {
     else { conj.has(k) ? conj.delete(k) : conj.add(k); }
     return render();
   }
-  const el = t.closest('[data-aba],[data-acao],[data-detalhe],[data-fechar-painel],[data-decidir],[data-copiar],[data-aceitar-sugestao],[data-editar-vinculo],[data-desvincular],[data-salvar-vinculo],[data-fechar-dialogo],[data-salvar-justificativa],[data-salvar-nota]');
+  const abrir = t.closest('[data-abrir-cliente]');
+  if (abrir) return abrirCliente(abrir.dataset.abrirCliente, abrir.dataset.plataforma || '');
+  const el = t.closest('[data-copiar-aviso],[data-remover-pessoa],[data-aba],[data-acao],[data-detalhe],[data-fechar-painel],[data-decidir],[data-copiar],[data-aceitar-sugestao],[data-editar-vinculo],[data-desvincular],[data-salvar-vinculo],[data-fechar-dialogo],[data-salvar-justificativa],[data-salvar-nota]');
   if (!el) return;
   const d = el.dataset;
   const w = ws();
+  if (d.copiarAviso !== undefined) { const a = painelAtual?.avisos.avisos[Number(d.copiarAviso)]; return a && copiar(a.texto); }
+  if (d.removerPessoa !== undefined) {
+    const [p] = estado.db.equipe.pessoas.splice(Number(d.removerPessoa), 1);
+    if (p?.email) trocarEmail(p.email, null);
+    persistir(); return render();
+  }
   if (d.aba) { estado.aba = d.aba; estado.detalhe = null; render(); window.scrollTo({ top: 0 }); return; }
   if (d.acao) return acao(d.acao, el);
   if (d.detalhe) { estado.detalhe = d.detalhe; return render(); }
@@ -372,12 +427,42 @@ document.addEventListener('click', (ev) => {
   }
 });
 
+/** Troca (ou apaga, com null) um e-mail da equipe em todas as referências: liderança e clientes. */
+function trocarEmail(antigo, novo) {
+  for (const p of estado.db.equipe.pessoas) if (p.lider === antigo) p.lider = novo;
+  for (const w of Object.values(estado.db.clientes)) if (w.analista === antigo) w.analista = novo;
+  for (const k of ['analista', 'lideranca']) if (estado.filtroPainel[k] === antigo) estado.filtroPainel[k] = novo || '';
+}
+
 document.addEventListener('change', (ev) => {
   const el = ev.target;
+  if (el.dataset.filtroPainel !== undefined) { estado.filtroPainel[el.dataset.filtroPainel] = el.value; salvarFiltroPainel(); return render(); }
+  if (el.dataset.analistaCliente !== undefined) {
+    const w = estado.db.clientes[el.dataset.analistaCliente];
+    if (w) { w.analista = el.value || null; persistir(); render(); }
+    return;
+  }
+  if (el.dataset.pessoa !== undefined) {
+    const p = estado.db.equipe.pessoas[Number(el.dataset.pessoa)];
+    if (!p) return;
+    const campo = el.dataset.campo;
+    if (campo === 'email') {
+      const novo = el.value.trim().toLowerCase();
+      if (novo && estado.db.equipe.pessoas.some((x) => x !== p && x.email === novo)) { toast('Esse e-mail já está na equipe.'); return render(); }
+      if (p.email) trocarEmail(p.email, novo || null);
+      p.email = novo;
+    } else if (campo === 'lider') p.lider = el.value && el.value !== p.email ? el.value : null;
+    else p.nome = el.value.trim();
+    persistir(); return render();
+  }
   if (el.dataset.filtro !== undefined) { estado.filtros[el.dataset.filtro] = el.value; return render(); }
   if (el.dataset.filtroAlerta !== undefined) { estado.filtroAlertas[el.dataset.filtroAlerta] = el.value; return render(); }
   switch (el.dataset.acaoChange) {
-    case 'trocar-cliente': estado.db.clienteAtivo = el.value; estado.detalhe = null; persistir(); return render();
+    case 'trocar-cliente':
+      estado.db.clienteAtivo = el.value; estado.detalhe = null;
+      if (ABAS_GERAIS.includes(estado.aba)) estado.aba = 'geral';
+      persistir(); return render();
+    case 'link-painel': estado.db.preferencias.linkPainel = el.value.trim(); persistir(); return render();
     case 'trocar-ref': if (el.value) { estado.ref = el.value; render(); } return;
     case 'agrupar': estado.agrupamento = el.value; return render();
     default:
@@ -400,9 +485,17 @@ document.addEventListener('input', (ev) => {
     for (const lab of document.querySelectorAll('#dlg .lista-check label')) lab.hidden = q && !lab.dataset.texto.includes(q);
   }
 });
-document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && estado.detalhe) { estado.detalhe = null; render(); } });
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && estado.detalhe) { estado.detalhe = null; render(); }
+  const linha = ev.target.closest?.('tr[data-abrir-cliente]');
+  if (linha && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); abrirCliente(linha.dataset.abrirCliente, linha.dataset.plataforma || ''); }
+});
 
 render();
+
+// Link do aviso no chat: #cliente=…&plataforma=… abre direto a conta.
+const doLink = new URLSearchParams(location.hash.slice(1));
+if (doLink.get('cliente')) abrirCliente(doLink.get('cliente'), doLink.get('plataforma') || '');
 
 // exposto para depuração no console
 globalThis.monitorPacing = { estado, calcular, chaveEntidade, rotuloLinha, brl };

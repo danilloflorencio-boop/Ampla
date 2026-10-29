@@ -41,6 +41,12 @@ pode ajustar os dois sem mexer na lógica.
 | R14 | Desvio acima de ±10% sem justificativa registrada | info | Registrar causa + ação (exigência do plano) |
 | R15 | Soma das diárias configuradas nos conjuntos ≠ diária necessária em mais de 10% | info / atenção | Ajustar a diária configurada para o valor necessário |
 
+**Foco em pacing:** R06, R07 e R07b (custo unitário e resultado) continuam no motor, mas ficam
+fora das telas e dos avisos (`regrasDeKpi` em `src/config/config.js`).
+
+**Avisos no Google Chat:** regra própria, mais restrita que os alertas: só linha ativa fora de
+±10% a 10 dias ou menos do fim, com dado em dia. Ver `docs/AVISOS.md`.
+
 ## Comportamento das plataformas (R11)
 
 Os valores de referência estão em `PLATAFORMAS` (`src/config/config.js`) e todos aparecem como `validado: false`.

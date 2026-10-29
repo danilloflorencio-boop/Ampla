@@ -37,6 +37,17 @@ export const CONFIG_PADRAO = {
   // Remanejamento (R12): só sugere mover verba entre linhas do MESMO flight e MESMO produto.
   // [DECISÃO em aberto] pode virar 'produto' (entre flights) ou 'cliente' (livre).
   escopoRemanejamento: 'flight+produto',
+
+  // Painel e avisos no Google Chat. O monitor é consultivo: o chat só avisa quando uma linha
+  // ativa sai da margem e já está perto do fim. Antes disso, o ritmo ainda tem tempo de se acertar.
+  avisos: {
+    margem: 0.10,       // |índice − 1| acima de 10% = fora da margem
+    diasParaFim: 10,    // só avisa quando faltam até 10 dias (contando hoje) para a linha acabar
+    linkPainel: '',     // endereço do painel publicado, citado no fim da mensagem (vazio = não cita)
+  },
+
+  // Foco 100% em pacing: regras de KPI (custo unitário e resultado) ficam fora do painel e dos avisos.
+  regrasDeKpi: ['R06', 'R07', 'R07b'],
 };
 
 // KPI / Tipo de compra → qual métrica realizada conta como "resultado" e como calcular custo.
@@ -104,5 +115,6 @@ export function configDoCliente(overrides = {}) {
     ...overrides,
     status: { ...CONFIG_PADRAO.status, ...(overrides.status || {}) },
     regras: { ...CONFIG_PADRAO.regras, ...(overrides.regras || {}) },
+    avisos: { ...CONFIG_PADRAO.avisos, ...(overrides.avisos || {}) },
   };
 }

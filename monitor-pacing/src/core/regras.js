@@ -42,6 +42,20 @@ function alerta(regra, severidade, entidade, vars, extras = {}) {
  *  vinculos, sugestoes, nomes (Map chave → entidade), justificativas (Record linhaId → texto)
  *  ref, ultimaExtracao, cfg
  */
+/**
+ * Os dados do realizado estão em dia? Desatualizado quando falta o dia anterior a ontem ou a
+ * extração tem mais de `dadosDesatualizadosHoras`. Sem registro nenhum também conta como desatualizado.
+ * É a mesma condição que dispara a R13 e suspende as regras de ritmo (e os avisos do chat).
+ */
+export function frescorDosDados(registros, ext, ref, cfg = CONFIG_PADRAO) {
+  if (!registros?.length) return { desatualizado: true, ultimoDiaDados: null };
+  const ontem = addDias(ref, -1);
+  const ultimoDiaDados = registros.reduce((m, r) => (r.data > m ? r.data : m), '0000');
+  const extData = ext ? ext.slice(0, 10) : ultimoDiaDados;
+  const horas = ext && ext.length > 10 ? (new Date(`${ref}T12:00:00-03:00`) - new Date(ext)) / 36e5 : diffDias(extData, ref) * 24;
+  return { desatualizado: ultimoDiaDados < addDias(ontem, -1) || horas > cfg.regras.dadosDesatualizadosHoras, ultimoDiaDados };
+}
+
 export function avaliarRegras(ctx) {
   const cfg = ctx.cfg || CONFIG_PADRAO;
   const R = cfg.regras;
@@ -54,10 +68,8 @@ export function avaliarRegras(ctx) {
   let suspenso = false;
   if (ctx.registros?.length) {
     const ext = ctx.ultimaExtracao;
-    const ultimoDiaDados = ctx.registros.reduce((m, r) => (r.data > m ? r.data : m), '0000');
-    const extData = ext ? ext.slice(0, 10) : ultimoDiaDados;
-    const horas = ext && ext.length > 10 ? (new Date(`${ref}T12:00:00-03:00`) - new Date(ext)) / 36e5 : diffDias(extData, ref) * 24;
-    if (ultimoDiaDados < addDias(ontem, -1) || horas > R.dadosDesatualizadosHoras) {
+    const { desatualizado, ultimoDiaDados } = frescorDosDados(ctx.registros, ext, ref, cfg);
+    if (desatualizado) {
       suspenso = true;
       out.push(alerta('R13', 'critico', { tipo: 'cliente', id: 'dados', rotulo: 'Dados' },
         { extracao: ext ? ext.replace('T', ' ').slice(0, 16) : `dados até ${dataCurta(ultimoDiaDados)}`, ontem: dataCurta(ontem) }));
