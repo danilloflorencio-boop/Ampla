@@ -3,7 +3,7 @@ import { brl, pct, inteiro, decimal, dataBR, dataCurta, addDias } from '../core/
 import { rotuloLinha, rotuloCurto } from '../core/plano.js';
 import { configPlataforma } from '../config/config.js';
 import { agregar } from '../core/pacing.js';
-import { agruparPorCliente, podeGerirEquipe, foraDaMargem } from '../core/painel.js';
+import { agruparPorCliente, podeGerirEquipe, foraDaMargem, termometro } from '../core/painel.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const CONFIANCA = { alta: 'alta', media: 'média', baixa: 'baixa' };
@@ -80,6 +80,38 @@ export function topo(ctx, painel) {
 // ---------------------------------------------------------------- painel (todas as contas)
 const SENTIDO = { acima: { seta: '▲', rotulo: 'Acima' }, abaixo: { seta: '▼', rotulo: 'Abaixo' }, 'no-ritmo': { seta: '●', rotulo: 'No ritmo' } };
 const nomeDe = (equipe, email) => equipe.pessoas.find((p) => p.email === email)?.nome || '';
+// ---------------------------------------------------------------- termômetro
+const FAIXA = { 'muito-abaixo': 'Muito abaixo', abaixo: 'Abaixo', 'no-ritmo': 'No ritmo', acima: 'Acima', 'muito-acima': 'Muito acima' };
+const umaCasa = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** "0,3 dia adiantado" · "2,1 dias atrasado" · "em dia". */
+export function textoDias(dias) {
+  if (dias === null || dias === undefined) return '';
+  if (Math.abs(dias) < 0.05) return 'gasto em dia';
+  const n = umaCasa.format(Math.abs(dias));
+  return `gasto ${n} ${Math.abs(dias) < 2 ? 'dia' : 'dias'} ${dias > 0 ? 'adiantado' : 'atrasado'}`;
+}
+
+/**
+ * Termômetro de pacing: faixa em palavras, leitura em dias de verba, diferença em R$ e a régua
+ * calibrada (muito abaixo · abaixo · no ritmo · acima · muito acima) com o ponteiro.
+ */
+export function termometroHtml(tm, { titulo = 'Termômetro', ate = '' } = {}) {
+  if (!tm) return `<div class="termo-cartao"><dt>${esc(titulo)}</dt><dd>—</dd><small>sem previsto até ontem</small></div>`;
+  const dif = tm.diferenca;
+  const reais = `${brl(Math.abs(dif))} ${dif >= 0 ? 'acima' : 'abaixo'} do previsto${ate ? ` até ${ate}` : ''}`;
+  const leitura = `${FAIXA[tm.faixa]}: ${textoDias(tm.dias)}, ${reais}`;
+  return `<div class="termo-cartao f-${tm.faixa}"><dt>${esc(titulo)}</dt>
+    <dd>${FAIXA[tm.faixa]}</dd>
+    <small><b>${esc(textoDias(tm.dias))}</b> · ${esc(reais)}</small>
+    <div class="termo" role="img" aria-label="${esc(leitura)}" title="${esc(leitura)}">
+      <div class="termo-escala" style="grid-template-columns:${tm.cortes.map((c) => `${((c / tm.cortes.reduce((x, y) => x + y, 0)) * 100).toFixed(2)}fr`).join(' ')}"><span class="z-muito-abaixo"></span><span class="z-abaixo"></span><span class="z-no-ritmo"></span><span class="z-acima"></span><span class="z-muito-acima"></span></div>
+      <span class="termo-ponteiro" style="left:${(tm.posicao * 100).toFixed(1)}%"></span>
+    </div>
+    <div class="termo-rotulos" aria-hidden="true"><span>atrasado</span><span>no ritmo</span><span>adiantado</span></div>
+  </div>`;
+}
+
 const pp = (v) => `${v >= 0 ? '+' : '−'}${decimal(Math.abs(v) * 100)} p.p.`;
 const desvioTexto = (d) => (d === null || d === undefined ? '—' : `${d >= 0 ? '+' : '−'}${pct(Math.abs(d), 1)}`);
 
@@ -148,7 +180,7 @@ export function telaPainel(p, estado, db) {
       <div class="p-abaixo"><dt>Abaixo</dt><dd>${pl.abaixo}</dd></div>
       <div class="p-aviso"><dt>Avisos no chat</dt><dd>${pl.comAviso}<small>${pl.linhasComAviso} linha(s)</small></dd></div>
       ${pl.desatualizadas ? `<div class="p-velho"><dt>Dados desatualizados</dt><dd>${pl.desatualizadas}<small>conta(s) sem aviso até a carga chegar</small></dd></div>` : ''}
-      <div class="p-saude ${pl.saudeSentido ? `p-${pl.saudeSentido}` : ''}" title="${esc(`${brl(pl.gasto)} usados de ${brl(pl.planejadoAteOntem)} previstos até ${dataCurta(addDias(p.ref, -1))}`)}"><dt>Saúde geral</dt><dd>${pl.saude === null ? '—' : pct(pl.saude, 0)}</dd><small>do previsto até ${dataCurta(addDias(p.ref, -1))} · 100% = no ritmo</small></div>
+      <div class="p-termo">${termometroHtml(pl.termometro, { titulo: 'Termômetro geral', ate: dataCurta(addDias(p.ref, -1)) })}</div>
     </dl>
     <div class="quadro-filtros">
       ${sel('analista', 'Contas de', pessoas.map((x) => ({ v: x.email, r: x.nome })), f.analista, 'Toda a Ampla')}
@@ -276,7 +308,6 @@ export function visaoGeral(ctx, { detalhes = true } = {}) {
   if (!ativas.length) {
     return `<section class="vg">${topo}<section class="vazio"><h2>Nenhuma linha em veiculação</h2><p>${ws.realizado.length ? 'As linhas deste filtro já acabaram ou ainda não começaram.' : 'Ainda não há realizado carregado para este cliente.'}</p></section></section>`;
   }
-  const desvio = t.indice === null ? null : t.indice - 1;
   const projDesvio = t.desvioProjetado;
   const linhas = [...ativas].sort((a, b) => a.linha.fim.localeCompare(b.linha.fim)).map((m) => `<tr>
       <td class="nome">${esc(rotuloCurto(m.linha) || rotuloLinha(m.linha))}<span class="vg-sub">${esc(configPlataforma(m.linha.plataforma).nome)}</span></td>
@@ -289,7 +320,7 @@ export function visaoGeral(ctx, { detalhes = true } = {}) {
     <dl class="vg-cartoes">
       <div><dt>Investimento</dt><dd>${brl(t.investimento)}</dd><small>${ativas.length} linha(s) em veiculação</small></div>
       <div><dt>Usado até ontem</dt><dd>${brl(t.gasto)}</dd><small>previsto: ${brl(t.planejadoAteOntem)}</small></div>
-      <div class="vg-ritmo s-${esc(t.status.codigo)}"><dt>Ritmo</dt><dd>${t.indice === null ? '—' : decimal(t.indice)}</dd><small>${chip(t.status)}${desvio === null ? '' : ` ${desvio >= 0 ? '+' : '−'}${pct(Math.abs(desvio), 0)}`}</small></div>
+      <div class="vg-termo">${termometroHtml(termometro(t, cfg), { titulo: 'Termômetro', ate: dataCurta(addDias(ref, -1)) })}</div>
       <div><dt>Projeção até o fim</dt><dd>${brl(t.projecaoFim)}</dd><small>${projDesvio === null ? '' : `${projDesvio >= 0 ? '+' : '−'}${pct(Math.abs(projDesvio), 0)} do investimento`}</small></div>
     </dl>
     <section class="bloco">${regua(t, { grande: true, tolerancia: cfg.avisos.margem })}</section>

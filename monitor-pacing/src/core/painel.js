@@ -149,6 +149,7 @@ export function contasDoCliente(ws, ref) {
       ultimoDiaDados: frescor.ultimoDiaDados,
       status: ativas.length && frescor.desatualizado ? { codigo: 'desatualizado', rotulo: 'Dados desatualizados' } : ativas.length ? t.status : situacao === 'agendada' ? { codigo: 'agendada', rotulo: 'Agendada' } : { codigo: 'encerrada', rotulo: 'Encerrada' },
       media: t.media,
+      diariaPlan: t.diariaPlan,
       diariaNecessaria: t.diariaNecessaria,
       projecaoFim: t.projecaoFim,
       desvioProjetado: t.desvioProjetado,
@@ -167,15 +168,33 @@ export function montarPainel(workspaces, ref) {
   return { ref, contas, placar: placar(contas) };
 }
 
-function saude(contas, cfg) {
-  const previsto = contas.reduce((s, c) => s + c.planejadoAteOntem, 0);
-  const saude = previsto > 0 ? contas.reduce((s, c) => s + c.gasto, 0) / previsto : null;
-  return { saude, saudeSentido: sentido(saude, cfg) };
+/**
+ * Termômetro de pacing: em vez de "101%" (que parece "101% da verba gasta"), mede o adiantamento
+ * em DIAS DE VERBA: (usado − previsto até ontem) ÷ diária planejada. +0,5 = gastou meio dia a mais
+ * do que devia até aqui; −2 = está dois dias de verba atrasado. A faixa usa a margem dos avisos.
+ * `posicao` (0 a 1) é onde o ponteiro fica na régua, que vai de −escala a +escala do previsto.
+ * @returns {null | { desvio, diferenca, dias, faixa, posicao, cortes }}
+ */
+export function termometro({ gasto, planejadoAteOntem, diariaPlan }, cfg = CONFIG_PADRAO) {
+  if (!planejadoAteOntem) return null;
+  const desvio = gasto / planejadoAteOntem - 1;
+  const a = Math.abs(desvio);
+  const lado = desvio > 0 ? 'acima' : 'abaixo';
+  const faixa = a <= cfg.avisos.margem + EPS ? 'no-ritmo' : a <= cfg.status.atencao + EPS ? lado : `muito-${lado}`;
+  const e = cfg.termometro.escala;
+  return {
+    desvio,
+    diferenca: gasto - planejadoAteOntem,
+    dias: diariaPlan > 0 ? (gasto - planejadoAteOntem) / diariaPlan : null,
+    faixa,
+    posicao: (Math.max(-e, Math.min(e, desvio)) + e) / (2 * e),
+    // larguras das cinco faixas da régua (muito abaixo, abaixo, no ritmo, acima, muito acima)
+    cortes: [e - cfg.status.atencao, cfg.status.atencao - cfg.avisos.margem, 2 * cfg.avisos.margem, cfg.status.atencao - cfg.avisos.margem, e - cfg.status.atencao],
+  };
 }
 
 /**
- * Placar do topo do painel. Saúde geral = usado ÷ previsto até ontem, somando as contas em
- * veiculação com dado em dia (1 = 100% = no ritmo); o sentido segue a mesma margem dos avisos.
+ * Placar do topo do painel. O termômetro geral soma as contas em veiculação com dado em dia.
  */
 export function placar(contas, cfg = CONFIG_PADRAO) {
   const ativas = contas.filter((c) => c.situacao === 'ativa');
@@ -194,7 +213,11 @@ export function placar(contas, cfg = CONFIG_PADRAO) {
     investimento: emDia.reduce((s, c) => s + c.investimento, 0),
     gasto: emDia.reduce((s, c) => s + c.gasto, 0),
     planejadoAteOntem: emDia.reduce((s, c) => s + c.planejadoAteOntem, 0),
-    ...saude(emDia, cfg),
+    termometro: termometro({
+      gasto: emDia.reduce((s, c) => s + c.gasto, 0),
+      planejadoAteOntem: emDia.reduce((s, c) => s + c.planejadoAteOntem, 0),
+      diariaPlan: emDia.reduce((s, c) => s + c.diariaPlan, 0),
+    }, cfg),
   };
 }
 

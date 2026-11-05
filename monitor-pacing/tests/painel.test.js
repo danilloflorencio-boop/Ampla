@@ -5,7 +5,7 @@ import { lerPlano } from '../src/core/plano.js';
 import { gerarRealizadoMock } from '../src/core/mock.js';
 import { entidadesDoRealizado } from '../src/core/realizado.js';
 import { sugerirVinculos, aplicarSugestoes } from '../src/core/vinculo.js';
-import { foraDaMargem, sentido, contasDoCliente, montarPainel, filtrarPainel, soPacing, calcularCliente, ajusteDaLinha, tipoDeOrcamento, agruparPorCliente, ehLideranca, podeGerirEquipe, analistaDaConta } from '../src/core/painel.js';
+import { foraDaMargem, sentido, contasDoCliente, montarPainel, filtrarPainel, soPacing, calcularCliente, ajusteDaLinha, tipoDeOrcamento, agruparPorCliente, ehLideranca, podeGerirEquipe, analistaDaConta, termometro } from '../src/core/painel.js';
 import { montarAvisos, linkDaConta } from '../src/core/avisos.js';
 import { configDoCliente } from '../src/config/config.js';
 import { montarDemo, EQUIPE_DEMO, REF_DEMO } from '../src/demo/demoPainel.js';
@@ -62,8 +62,10 @@ test('painel junta todos os clientes, como uma MCC, e filtra por analista, lider
   assert.ok(painel.contas.some((c) => c.plataforma === 'GOOGLE ADS'));
   assert.equal(painel.placar.contas, painel.contas.length);
   const emDia = painel.contas.filter((c) => c.situacao === 'ativa' && !c.desatualizado);
-  assert.equal(painel.placar.saude, emDia.reduce((t, c) => t + c.gasto, 0) / emDia.reduce((t, c) => t + c.planejadoAteOntem, 0), 'saúde geral = usado ÷ previsto até ontem');
-  assert.equal(painel.placar.saudeSentido, sentido(painel.placar.saude));
+  const soma = (k) => emDia.reduce((t, c) => t + c[k], 0);
+  const tg = painel.placar.termometro;
+  assert.equal(tg.diferenca, soma('gasto') - soma('planejadoAteOntem'), 'termômetro geral soma as contas em dia');
+  assert.equal(tg.dias, tg.diferenca / soma('diariaPlan'));
   const daDuda = filtrarPainel(painel.contas, { analista: 'duda.nunes@exemplo.com' }, EQUIPE_DEMO);
   assert.ok(daDuda.length && daDuda.every((c) => c.analista === 'duda.nunes@exemplo.com'));
   const timeHelena = filtrarPainel(painel.contas, { lideranca: 'helena.prado@exemplo.com' }, EQUIPE_DEMO);
@@ -205,4 +207,20 @@ test('liderança associa cada conta a um analista; sem associação vale o do cl
   assert.ok(bruna && bruna.contas.includes(google.id), 'o aviso da conta vai para quem foi associado');
   assert.ok(!avisos.some((a) => a.para === 'caio.rocha@exemplo.com' && a.contas.includes(google.id)));
   assert.deepEqual(filtrarPainel(contas, { analista: 'bruna.lima@exemplo.com' }).map((c) => c.id), [google.id]);
+});
+
+test('termômetro mede o adiantamento em dias de verba, não em % da verba', () => {
+  const t = (gasto) => termometro({ gasto, planejadoAteOntem: 100000, diariaPlan: 10000 });
+  assert.deepEqual([t(100000).dias, t(105000).dias, t(80000).dias], [0, 0.5, -2], 'R$ 50 a mais com diária de R$ 100 = meio dia adiantado');
+  assert.equal(t(105000).faixa, 'no-ritmo');
+  assert.equal(t(110000).faixa, 'no-ritmo', 'exatamente 10% ainda está na margem');
+  assert.equal(t(115000).faixa, 'acima');
+  assert.equal(t(80000).faixa, 'abaixo', '20% abaixo é abaixo, ainda não muito abaixo');
+  assert.equal(t(75000).faixa, 'muito-abaixo');
+  assert.equal(t(100000).posicao, 0.5, 'no ritmo, o ponteiro fica no meio');
+  assert.equal(t(200000).posicao, 1, 'fora da escala, o ponteiro para no fim');
+  assert.equal(t(70000).posicao, 0);
+  assert.deepEqual(t(100000).cortes.map((x) => Math.round(x * 100)), [10, 10, 20, 10, 10]);
+  assert.equal(termometro({ gasto: 5, planejadoAteOntem: 0, diariaPlan: 1 }), null, 'sem previsto, sem leitura');
+  assert.equal(termometro({ gasto: 5, planejadoAteOntem: 10, diariaPlan: 0 }).dias, null);
 });

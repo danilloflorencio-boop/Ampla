@@ -210,14 +210,14 @@ table.dados td.nome { white-space: normal; min-width: 240px; max-width: 420px; }
 @media (prefers-reduced-motion: reduce) { .ticker { overflow-x: auto; } .ticker-copia { display: none; } }
 
 .placar { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1px; margin: 18px 0 0; background: var(--q-linha); border: 1px solid var(--q-linha); border-radius: 10px; overflow: hidden; }
-.placar div { background: var(--q-fundo); padding: 12px 14px; min-width: 0; }
+.placar > div { background: var(--q-fundo); padding: 12px 14px; min-width: 0; }
 .placar dt { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--q-rotulo); }
 .placar dd { margin: 4px 0 0; font-size: 26px; font-weight: 650; font-stretch: 90%; line-height: 1.1; }
 .placar dd small { display: block; font-size: 12px; font-weight: 400; color: var(--q-tinta-2); font-stretch: 100%; margin-top: 2px; }
 .placar .p-ok dd { color: var(--q-ok); } .placar .p-acima dd { color: var(--q-acima); } .placar .p-abaixo dd { color: var(--q-abaixo); }
 .placar .p-aviso dd { color: var(--q-acima-forte); }
 .placar .p-velho dd { color: var(--q-tinta-2); }
-.placar .p-saude.p-no-ritmo dd { color: var(--q-ok); } .placar .p-saude.p-acima dd { color: var(--q-acima); } .placar .p-saude.p-abaixo dd { color: var(--q-abaixo); }
+
 
 .quadro-filtros { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 18px 0 14px; }
 .quadro-filtros .campo { color: var(--q-tinta-2); }
@@ -292,16 +292,37 @@ table.dados .marcar input { width: auto; min-width: 0; }
 .vg-titulo h2 { margin: 0; font-size: 24px; font-stretch: 110%; letter-spacing: -0.01em; }
 .vg-titulo p { margin: 2px 0 0; color: var(--tinta-2); font-size: 13px; }
 .vg-cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 0; }
-.vg-cartoes div { background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio-2); padding: 16px 18px; min-width: 0; }
+.vg-cartoes > div { background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio-2); padding: 16px 18px; min-width: 0; }
 .vg-cartoes dt { font-size: 13px; color: var(--tinta-2); }
 .vg-cartoes dd { margin: 4px 0 2px; font-size: 26px; font-weight: 650; font-stretch: 92%; }
 .vg-cartoes small { font-size: 13px; color: var(--tinta-2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.vg-ritmo { border-top: 4px solid var(--c, var(--neutro)) !important; }
-.vg-ritmo.s-ok { --c: var(--ok); } .vg-ritmo.s-atencao-under { --c: var(--under-1); } .vg-ritmo.s-critico-under { --c: var(--under-2); }
-.vg-ritmo.s-atencao-over { --c: var(--over-1); } .vg-ritmo.s-critico-over { --c: var(--over-2); }
+
 .vg .regua.grande { margin: 34px 4px 30px; }
 .vg-sub { display: block; font-size: 12px; color: var(--tinta-3); }
 .vg-aviso { display: inline-block; margin-left: 8px; font-size: 12px; color: var(--over-2); }
+
+/* ---------- termômetro de pacing ----------
+   Leitura em dias de verba (nada de "101%"), régua calibrada pela margem dos avisos.
+   Claro por padrão; dentro do quadro escuro, usa as cores do quadro. */
+.termo-cartao { --t-muito-abaixo: var(--under-2); --t-abaixo: var(--under-1); --t-no-ritmo: var(--ok); --t-acima: var(--over-1); --t-muito-acima: var(--over-2); --t-tinta: var(--tinta); --t-tinta-2: var(--tinta-2); }
+.quadro .termo-cartao { --t-muito-abaixo: #5f8fe8; --t-abaixo: var(--q-abaixo); --t-no-ritmo: var(--q-ok); --t-acima: var(--q-acima); --t-muito-acima: var(--q-acima-forte); --t-tinta: var(--q-tinta); --t-tinta-2: var(--q-tinta-2); }
+.termo-cartao.f-muito-abaixo { --t-cor: var(--t-muito-abaixo); } .termo-cartao.f-abaixo { --t-cor: var(--t-abaixo); } .termo-cartao.f-no-ritmo { --t-cor: var(--t-no-ritmo); }
+.termo-cartao.f-acima { --t-cor: var(--t-acima); } .termo-cartao.f-muito-acima { --t-cor: var(--t-muito-acima); }
+.termo-cartao dd { color: var(--t-cor, var(--t-tinta)); }
+.termo-cartao small { display: block; color: var(--t-tinta-2); }
+.termo-cartao small b { color: var(--t-tinta); font-weight: 600; }
+.termo { position: relative; margin: 12px 0 4px; height: 12px; }
+.termo-escala { display: grid; height: 100%; border-radius: 6px; overflow: hidden; gap: 2px; }
+.termo-escala span { opacity: 0.35; }
+.z-muito-abaixo { background: var(--t-muito-abaixo); } .z-abaixo { background: var(--t-abaixo); } .z-no-ritmo { background: var(--t-no-ritmo); }
+.z-acima { background: var(--t-acima); } .z-muito-acima { background: var(--t-muito-acima); }
+.f-muito-abaixo .z-muito-abaixo, .f-abaixo .z-abaixo, .f-no-ritmo .z-no-ritmo, .f-acima .z-acima, .f-muito-acima .z-muito-acima { opacity: 1; }
+.termo-ponteiro { position: absolute; top: -5px; bottom: -5px; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--t-tinta); box-shadow: 0 0 0 2px var(--t-fundo, transparent); }
+.quadro .termo-ponteiro { --t-fundo: var(--q-fundo); }
+.vg-termo .termo-ponteiro { --t-fundo: var(--superficie); }
+.termo-rotulos { display: flex; justify-content: space-between; font-size: 11px; color: var(--t-tinta-2); }
+.placar .p-termo { grid-column: span 2; }
+.placar .p-termo dd { font-size: 22px; }
 
 /* ---------- página de teste ---------- */
 .teste-intro { margin: 0 0 16px; max-width: 110ch; color: var(--tinta-2); }

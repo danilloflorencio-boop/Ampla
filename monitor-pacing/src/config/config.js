@@ -46,6 +46,12 @@ export const CONFIG_PADRAO = {
     linkPainel: '',     // endereço do painel publicado, citado no fim da mensagem (vazio = não cita)
   },
 
+  // Termômetro geral (painel e visão geral): a régua vai de −30% a +30% do previsto até ontem.
+  // As faixas seguem a margem dos avisos (±10% = no ritmo) e o limite de crítico (±20%).
+  termometro: {
+    escala: 0.30,
+  },
+
   // Foco 100% em pacing: regras de KPI (custo unitário e resultado) ficam fora do painel e dos avisos.
   regrasDeKpi: ['R06', 'R07', 'R07b'],
 };
@@ -120,5 +126,6 @@ export function configDoCliente(overrides = {}) {
     status: { ...CONFIG_PADRAO.status, ...(overrides.status || {}) },
     regras: { ...CONFIG_PADRAO.regras, ...(overrides.regras || {}) },
     avisos: { ...CONFIG_PADRAO.avisos, ...(overrides.avisos || {}) },
+    termometro: { ...CONFIG_PADRAO.termometro, ...(overrides.termometro || {}) },
   };
 }
