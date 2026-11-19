@@ -59,6 +59,9 @@ as justificativas e as notas das linhas que continuam.
 
 ## Estrutura
 
+O mapa completo (caminho dos dados, módulos, modelo de dados, telas, parâmetros e testes) está em
+`docs/ESTRUTURA.md`.
+
 ```
 src/
   core/            lógica pura, sem DOM — testável em Node
